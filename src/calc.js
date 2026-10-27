@@ -2,6 +2,7 @@
 // Формулы — как в бланке ОСК: процент смены = среднее процентов 7 пунктов (по каждому пункту выполнено / применимо, н/п не считается,
 // пункт без применимых — пропускается), за месяц — среднее смен,
 // взыскание — по шкале от среднего + за каждое грубое нарушение, штраф управляющего — доля от взысканий операторов станции.
+import { REVIEW_MAP } from "./map.js";
 export const ITEMS = ["Поприветствовал", "Уточнил заказ", "Уточнил способ оплаты", "Спросил про карту лояльности", "Предложил оформить карту", "Озвучил сумму и сдачу", "Попрощался"];
 
 /* CSV (как отдаёт Google: кавычки, переводы строк внутри) → массив объектов по заголовкам */
@@ -47,6 +48,9 @@ const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
 export function build(sheet, reviews, { month, today }) {
   const S = settings(sheet["Настройки"]), inM = d => d && d.slice(0, 7) === month;
   const stations = (sheet["Станции"] || []).filter(s => s["Станция"] && !/^нет$/i.test(s["Работает"] || "")).map(s => ({ code: s["Станция"], type: s["Тип"] || "АЗС", name: s["Адрес / название"] || "", manager: s["Управляющий"] || "", reviewName: s["Название в отзывах"] || "" }));
+  /* станции, известные только по отзывам (их нет в листе ОСК, например А-5, А-24), — тоже плитки: отзывы есть, проверок нет */
+  for (const [addr, code] of REVIEW_MAP) { const st0 = stations.find(s => s.code === code); if (!st0) stations.push({ code, type: "АЗС", name: addr, manager: "", reviewName: "" }); else if (!st0.name) st0.name = addr; }
+  stations.sort((a, b) => (parseInt(a.code.replace(/\D/g, "")) || 999) - (parseInt(b.code.replace(/\D/g, "")) || 999));
   const byCode = new Map(stations.map(s => [s.code, s]));
   const st = code => byCode.get(code) || null;
   /* наблюдения: оператор → смена → суммы по пунктам */
@@ -71,7 +75,8 @@ export function build(sheet, reviews, { month, today }) {
   const finds = (sheet["Находки ОСК и ОСБ"] || []).map(r => ({ date: isoDate(r["Дата"]), who: r["Кто нашёл"] || "", station: r["Станция"], what: r["Что случилось"] || "", to: r["Кому передали"] || "", due: isoDate(r["Срок"]), fixed: yes(r["Исправлено"]) })).filter(x => st(x.station) && x.date);
   /* отзывы → станция по «Названию в отзывах» (точно или вхождением) */
   const norm = s => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
-  const match = name => { const n = norm(name); if (!n) return null; for (const s of stations) { const r = norm(s.reviewName); if (r && (n === r || n.includes(r) || r.includes(n))) return s.code; } return null; };
+  const match = name => { const n = norm(name); if (!n) return null; for (const s of stations) { const r = norm(s.reviewName); if (r && (n === r || n.includes(r) || r.includes(n))) return s.code; }
+    for (const [addr, code] of REVIEW_MAP) if (n.includes(norm(addr))) return code; return null; };
   const rv = (reviews || []).map(r => ({ id: r.id, date: r.date, station: match(r.station_name), stationName: r.station_name || "", rating: r.rating, text: r.text || "", source: r.source || "", author: r.author || "" }));
   const rvM = rv.filter(r => inM(r.date));
   const unmatched = [...new Set(rv.filter(r => !r.station && r.stationName).map(r => r.stationName))];
