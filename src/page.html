@@ -208,7 +208,8 @@ const MONTHS = ["январь", "февраль", "март", "апрель", "�
 const mName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
 const dd = d => d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
 let RAW = null, D = null, month = "", tab = "overview", RF = { st: "", rate: "", src: "", per: "month", q: "", sort: "new", shown: 60 }, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
-try { tab = localStorage.getItem("azs-tab") === "reviews" ? "reviews" : "overview"; } catch {}
+let RK = "operators";
+try { tab = ["reviews", "rating"].includes(localStorage.getItem("azs-tab")) ? localStorage.getItem("azs-tab") : "overview"; RK = localStorage.getItem("azs-rk") || "operators"; } catch {}
 if (tv) document.body.classList.add("tv");
 
 function loginView() {
@@ -312,8 +313,8 @@ function render() {
     <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
     <button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
-  <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
-  ${tab === "reviews" && !tv ? reviewsTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
+  <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="rating" aria-selected="${tab === "rating"}">Рейтинг</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
+  ${tab === "reviews" && !tv ? reviewsTab() : tab === "rating" && !tv ? ratingTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
     <div class="panel"><h3>Стандарт обслуживания · сейчас</h3><div class="gauge">${ring(N.nowPct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.nowPct)}</b> <span class="muted">— по 3 последним сменам каждого</span></span><span>норма — 85% · за ${mName(D.month)}: <b>${pct(N.pct)}</b></span><span>план ОСК за месяц: <b>${N.plan.done} из ${N.plan.need}</b> смен${N.plan.need ? ` (${Math.round(N.plan.done / N.plan.need * 100)}%)` : ""}</span>${N.stale ? `<span class="lv-warn">давно не проверяли: ${N.stale} операторов</span>` : ""}</div></div></div>
     <div class="panel"><h3>Оценка посетителей · ${mName(D.month)}</h3>
       <div class="mini"><span class="big" style="color:${stCol(N.rating, 4.5, 4)}">${N.rating == null ? "—" : N.rating.toFixed(1)}</span><span class="muted"><span class="stars" aria-hidden="true">${stars(N.rating)}</span><br>${N.reviews} отзывов, плохих ${N.bad}</span></div>
@@ -351,10 +352,34 @@ function render() {
     const m = $("#rmore"); if (m) m.onclick = () => { RF.shown += 100; render(); };
   }
   document.querySelectorAll("[data-goto]").forEach(b => b.onclick = e => { e.preventDefault(); openStation(b.dataset.goto); });
+  document.querySelectorAll("[data-rk]").forEach(b => b.onclick = () => { RK = b.dataset.rk; try { localStorage.setItem("azs-rk", RK); } catch {} render(); });
 }
 /* тренд к 3 сменам до этого и свежесть последней проверки */
 const trendOf = o => o.trend == null ? `<span class="muted">—</span>` : o.trend > 2 ? `<span class="lv-ok">↑ +${o.trend}</span>` : o.trend < -2 ? `<span class="lv-bad">↓ ${o.trend}</span>` : `<span class="muted">→ ${o.trend > 0 ? "+" : ""}${o.trend}</span>`;
 const freshOf = o => o.fresh === "never" ? `<span class="lv-bad">ни разу</span>` : `<span class="${o.fresh === "fresh" ? "lv-ok" : o.fresh === "due" ? "lv-warn" : "lv-bad"}">${dd(o.last)} · ${o.days === 0 ? "сегодня" : o.days + " дн. назад"}</span>`;
+/* 🏆 вкладка «Рейтинг»: АЗС · операторы · управляющие; до (прошлый месяц) → после (этот), динамика, линия по месяцам */
+const ST_LBL = { up: ["🟢", "исправился", "lv-ok"], flat: ["⚪", "на месте", "muted"], down: ["🔴", "ухудшился", "lv-bad"], falling: ["🔴🔴", "падает постоянно", "lv-bad"], new: ["🆕", "первый месяц", "muted"], none: ["", "нет данных", "muted"] };
+const dynBadge = x => { const [i, t, c] = ST_LBL[x.status] || ST_LBL.none; return `<span class="${c}" style="white-space:nowrap">${i} ${t}${x.delta != null ? ` <b>${x.delta > 0 ? "+" : ""}${x.delta}</b>` : ""}</span>`; };
+const spark = s => { const pts = s.map((x, i) => [i, x.pct]).filter(p => p[1] != null); if (pts.length < 2) return `<span class="muted">—</span>`; const W = 90, H = 26, X = i => 4 + i * (W - 8) / Math.max(1, s.length - 1), Y = v => H - 3 - (v / 100) * (H - 6);
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="динамика по месяцам"><line x1="0" x2="${W}" y1="${Y(85)}" y2="${Y(85)}" stroke="var(--grid)" stroke-dasharray="2 3"/><polyline fill="none" stroke="var(--s1)" stroke-width="2" points="${pts.map(p => X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1)).join(" ")}"/>${pts.map((p, k) => k === pts.length - 1 ? `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3" fill="var(--s1)"/>` : "").join("")}</svg>`; };
+const medal = i => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1;
+const beforeAfter = x => `<span class="num">${pct(x.before)} → <b class="${lvl(x.after)}">${pct(x.after)}</b></span>`;
+function ratingTab() {
+  const R = D.rating, L = R[RK] || [], name = x => RK === "operators" ? `<b>${esc(x.name)}</b> <a href="#" data-goto="${esc(x.station)}" class="muted" style="color:inherit">${esc(x.station)}</a>` : RK === "stations" ? `<a href="#" data-goto="${esc(x.code)}" style="color:inherit"><b>${esc(x.code)}</b></a> <span class="muted">${esc(x.name || "")}</span>` : `<b>${esc(x.name)}</b> <span class="muted">${x.stations.map(esc).join(", ")}</span>`;
+  const withData = L.filter(x => x.after != null || x.now != null), best = withData[0], grow = [...L].filter(x => x.delta != null).sort((a, b) => b.delta - a.delta)[0], fall = L.filter(x => x.status === "falling" || x.status === "down").sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0))[0];
+  const card3 = (title, x, txt) => `<div class="panel" style="gap:4px"><h3>${title}</h3>${x ? `<div style="font-size:1.05rem">${name(x)}</div><div>${txt(x)}</div>` : `<div class="empty">пока нет — нужен второй месяц данных</div>`}</div>`;
+  const cnt = s => L.filter(x => x.status === s).length;
+  const extraHead = RK === "stations" ? "<th>Отзывы</th><th>Грубых</th><th>Взыскания</th><th>ОСК</th>" : RK === "managers" ? "<th>Исправились</th><th>Взыскания станций</th><th>Штраф управл.</th>" : "<th>Грубых</th>";
+  const extra = x => RK === "stations" ? `<td class="n">${x.reviews ? "★" + x.rating.toFixed(1) + " · " + x.reviews : "—"}</td><td class="n">${x.gross}</td><td class="n">${rub(x.fines)}</td><td>${esc(x.osk || "—")}</td>` : RK === "managers" ? `<td class="n">${x.problem ? `${x.fixed} из ${x.problem}` : "—"}</td><td class="n">${rub(x.fines)}</td><td class="n">${rub(x.managerFine)}</td>` : `<td class="n">${x.gross}</td>`;
+  return `<section class="panel" style="gap:12px">
+    <div class="filters"><div class="tabs" style="border:0">${[["stations", "АЗС"], ["operators", "Операторы"], ["managers", "Управляющие"]].map(([k, t]) => `<button class="tab" type="button" data-rk="${k}" aria-selected="${RK === k}">${t}<span class="n">${(R[k] || []).length}</span></button>`).join("")}</div>
+      <span class="muted">до — ${mName(R.prevMonth)}, после — ${mName(D.month)} · исправился: +5 п. и больше · ухудшился: −5 и больше · «падает постоянно» — два месяца подряд</span></div>
+    <div class="hero">${card3("🏆 Лучший", best, x => `${pct(x.after ?? x.now)} ${x.after == null ? "<span class='muted'>сейчас</span>" : ""}`)}${card3("📈 Больше всех вырос", grow && grow.delta > 0 ? grow : null, x => `${beforeAfter(x)} ${dynBadge(x)}`)}${card3("📉 Тревога: падает", fall, x => `${beforeAfter(x)} ${dynBadge(x)}`)}</div>
+    <div class="rsum">🟢 исправились <b>${cnt("up")}</b> · ⚪ на месте <b>${cnt("flat")}</b> · 🔴 ухудшились <b>${cnt("down")}</b> · 🔴🔴 падают постоянно <b>${cnt("falling")}</b>${cnt("new") ? ` · 🆕 первый месяц <b>${cnt("new")}</b>` : ""}</div>
+    ${L.length ? `<div class="tbl"><table class="rtab"><thead><tr><th>Место</th><th>${RK === "stations" ? "АЗС" : RK === "managers" ? "Управляющий" : "Оператор"}</th><th>Сейчас</th><th>До → после</th><th>Динамика</th><th>По месяцам</th>${extraHead}</tr></thead>
+      <tbody>${L.map((x, i) => `<tr class="${x.status === "falling" || x.status === "down" ? "bad" : ""}"><td class="n" style="font-size:1.1rem">${x.after == null ? "—" : medal(i)}</td><td>${name(x)}</td><td class="n ${lvl(x.now)}">${pct(x.now)}</td><td>${beforeAfter(x)}</td><td>${dynBadge(x)}</td><td>${spark(x.series)}</td>${extra(x)}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">Нет данных проверок — загрузите бланки ОСК.</div>`}
+  </section>`;
+}
 /* строка отзыва в таблице: когда · станция · оценка · текст · источник и автор */
 function revRow(r, withStation) {
   const t = RAW.today, y = new Date(Date.parse(t + "T12:00:00Z") - 864e5).toISOString().slice(0, 10), s = r.station && D.stations.find(x => x.code === r.station), k = Math.max(1, Math.min(5, Math.round(r.rating)));

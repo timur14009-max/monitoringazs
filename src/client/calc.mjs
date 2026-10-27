@@ -192,6 +192,30 @@ export function build(sheet, reviews, { month, today }) {
   const places = new Map(); for (const r of rvM) { const k = r.station || short(r.stationName), x = places.get(k) || { name: k, code: r.station || null, sum: 0, n: 0, bad: 0 }; x.sum += r.rating; x.n++; if (r.rating <= 2) x.bad++; places.set(k, x); }
   const byPlace = [...places.values()].map(x => ({ name: x.name, code: x.code, n: x.n, bad: x.bad, avg: Math.round(x.sum / x.n * 10) / 10 })).sort((a, b) => a.avg - b.avg || b.n - a.n);
   const netItems = ITEMS.map((name, i) => { let d = 0, a = 0; for (const s of stations) { const t = items.get(s.code + "|" + i); if (t) { d += t.done; a += t.appl; } } return { name, pct: a ? Math.round(d / a * 100) : null }; });
+  /* 🏆 РЕЙТИНГ (решение Тимура 27.10): «до» — прошлый месяц, «после» — выбранный; исправился ≥ +5 п., ухудшился ≤ −5, «падает постоянно» —
+     ухудшение два раза подряд (по трём последним месяцам с данными); линия — до 6 месяцев */
+  const STEP = 5, prevMonth = (() => { const d = new Date(Date.parse(month + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
+  const histMonths = dataMonths.filter(mm => mm <= month).slice(-6);
+  const dyn = series => { /* series: [{m, pct}] по возрастанию, pct может быть null */
+    const pts = series.filter(x => x.pct != null), after = series.find(x => x.m === month)?.pct ?? null, before = series.find(x => x.m === prevMonth)?.pct ?? null;
+    const delta = after != null && before != null ? after - before : null, last3 = pts.slice(-3);
+    const falling = last3.length === 3 && last3[1].pct - last3[0].pct <= -STEP && last3[2].pct - last3[1].pct <= -STEP;
+    return { after, before, delta, status: falling ? "falling" : delta == null ? (after == null ? "none" : "new") : delta >= STEP ? "up" : delta <= -STEP ? "down" : "flat", series };
+  };
+  const opKeys = [...new Set(histMonths.flatMap(mm => opsAt(mm).operators.map(o => o.station + "|" + o.name)))];
+  const rOps = opKeys.map(k => { const [station, name] = k.split("|"), series = histMonths.map(mm => ({ m: mm, pct: opsAt(mm).operators.find(o => o.station === station && o.name === name)?.pct ?? null }));
+    const cur = nowOps.find(o => o.station === station && o.name === name), mo = operators.find(o => o.station === station && o.name === name);
+    return { station, name, now: cur?.now ?? null, gross: mo?.gross ?? 0, ...dyn(series) }; });
+  const stPctAt = (code, mm) => { const p = opsAt(mm).operators.filter(o => o.station === code).map(o => o.pct).filter(x => x != null); return p.length ? Math.round(avg(p)) : null; };
+  const rSt = cards.filter(c => histMonths.some(mm => stPctAt(c.code, mm) != null) || c.reviews).map(c => ({ code: c.code, name: c.name, manager: c.manager, osk: c.osk, now: c.now.pct, rating: c.rating, reviews: c.reviews, gross: c.gross, fines: c.fines, ...dyn(histMonths.map(mm => ({ m: mm, pct: stPctAt(c.code, mm) }))) }));
+  const mgrs = new Map(); for (const c of cards) if (c.manager) (mgrs.get(c.manager) || mgrs.set(c.manager, []).get(c.manager)).push(c.code);
+  const rMgr = [...mgrs.entries()].map(([name, codes]) => { const series = histMonths.map(mm => { const p = codes.map(cd => stPctAt(cd, mm)).filter(x => x != null); return { m: mm, pct: p.length ? Math.round(avg(p)) : null }; });
+    /* «исправились после обратной связи»: операторы его станций, у кого «до» было ниже нормы, а прирост ≥ 5 п. */
+    const problem = rOps.filter(o => codes.includes(o.station) && o.before != null && o.before < S.norm && o.after != null), fixed = problem.filter(o => o.delta >= STEP).length;
+    const nows = codes.map(cd => cards.find(c => c.code === cd).now.pct).filter(x => x != null);
+    return { name, stations: codes, now: nows.length ? Math.round(avg(nows)) : null, fines: codes.reduce((a, cd) => a + cards.find(c => c.code === cd).fines, 0), managerFine: codes.reduce((a, cd) => a + cards.find(c => c.code === cd).managerFine, 0), fixed, problem: problem.length, ...dyn(series) }; });
+  const byAfter = (a, b) => (b.after ?? b.now ?? -1) - (a.after ?? a.now ?? -1);
+  const rating = { prevMonth, months: histMonths, operators: rOps.sort(byAfter), stations: rSt.sort(byAfter), managers: rMgr.sort(byAfter) };
   const allP = cards.map(c => c.pct).filter(x => x != null), allR = rvM.map(r => r.rating);
   return {
     month, settings: S, stations: cards,
@@ -201,7 +225,7 @@ export function build(sheet, reviews, { month, today }) {
       plan: { need: cards.reduce((a, c) => a + c.now.plan.need, 0), done: cards.reduce((a, c) => a + c.now.plan.done, 0) } },
     /* кого проверить в первую очередь: давно не проверяли или текущий результат ниже обратной связи */
     focus: cards.flatMap(c => c.now.operators.map(o => ({ ...o, osk: c.osk }))).filter(o => o.fresh === "stale" || o.fresh === "never" || (o.now != null && o.now < S.feedback)).sort((a, b) => ((b.fresh === "never" || b.fresh === "stale") - (a.fresh === "never" || a.fresh === "stale")) || (a.now ?? -1) - (b.now ?? -1)).slice(0, 15),
-    reviews: rv.slice(0, 500), unmatched, specialists, charts: { byMonth, dist, bySource, byPlace, netItems },
+    reviews: rv.slice(0, 500), unmatched, specialists, rating, charts: { byMonth, dist, bySource, byPlace, netItems },
     months: [...new Set([...(sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)), ...rv.map(r => (r.date || "").slice(0, 7))].filter(Boolean))].sort().reverse(),
   };
 }

@@ -39,6 +39,13 @@ ok("время по Москве: 23:30 UTC — уже следующий ден
   ok("резервный фонд: в 3-м месяце квартала поощрение Хорошей (≥90 %, грубых ≤3), Слабой — нет; остаток переходит", f.quarterMonth === 3 && f.winners.join() === "Хорошая" && f.each === 20250 && f.balance === 40500 - 20250, JSON.stringify(f));
   const QQ = { ...Q, "Наблюдения": [...Q["Наблюдения"], { ...row("20.12.2026", "Слабая", "1"), "Смена": "2" }] }, ns = build(QQ, [], { month: "2026-12", today: "2026-12-28" }).stations.find(s => s.code === "А-3").now.operators.find(o => o.name === "Слабая");
   ok("состояние сейчас: 3 последние смены (100, 0, 0 → 33 %), тренд к прошлым (0) +33, свежо", ns.now === 33 && ns.trend === 33 && ns.fresh === "fresh" && ns.shifts === 4, JSON.stringify(ns));
+  { /* рейтинг: Растущая 50 → 60 → 80 (исправилась), Падающая 90 → 80 → 60 (падает постоянно), Ровная 85 → 86 */
+    const mk = (d, op, ones) => ({ "Дата записи": d, "Станция": "А-4", "Оператор": op, "Смена": "1", ...Object.fromEntries(ITEMS7.map((i, n) => [i, n < ones ? "1" : "0"])) });
+    const P = (op, arr) => ["10.10.2026", "10.11.2026", "10.12.2026"].map((d, i) => mk(d, op, arr[i]));
+    const R = build({ ...sheet, "Наблюдения": [...P("Растущая", [3.5, 4.2, 5.6].map(Math.round)), ...P("Падающая", [7, 6, 4]), ...P("Ровная", [6, 6, 6])], "Грубые нарушения": [], "Станции": sheet["Станции"].map(s => s["Станция"] === "А-4" ? { ...s, "Управляющий": "Тестов Управ" } : s) }, [], { month: "2026-12", today: "2026-12-20" }).rating;
+    const g = n => R.operators.find(o => o.name === n);
+    ok("рейтинг: исправилась / падает постоянно / на месте; первое место — лучший «после»", g("Растущая").status === "up" && g("Падающая").status === "falling" && g("Ровная").status === "flat" && R.operators.at(-1).name === "Падающая" && g("Растущая").before === 57 && g("Растущая").after === 86, JSON.stringify(R.operators.map(o => [o.name, o.before, o.after, o.status])));
+    const M = R.managers.find(m => m.name === "Тестов Управ"); ok("рейтинг управляющих: станция А-4, исправились 1 из проблемных", M && M.stations.join() === "А-4" && M.fixed === 1 && M.problem >= 1, JSON.stringify(M)); }
   const f11 = build(Q, [], { month: "2026-11", today: "2026-11-28" }).stations.find(s => s.code === "А-3").fund;
   ok("резервный фонд: во 2-м месяце копится, поощрений нет", f11.quarterMonth === 2 && f11.paid === 0 && f11.balance === 27000 && f11.candidates[0].ok, JSON.stringify(f11)); }
 const C = D2.charts;
