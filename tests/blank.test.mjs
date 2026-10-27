@@ -7,6 +7,10 @@ const file = process.argv[2]; if (!file) { console.log("нужен путь к �
 const B = parseBlank(await readXlsx(readFileSync(file).buffer.slice(0)));
 ok("бланк: станция, месяц, проверяющий, управляющий, 6 операторов", B.station === "А-2" && B.month === "2026-10" && B.checker === "Раисат" && /Абдурахманов/.test(B.manager) && B.operators.length === 6, JSON.stringify({ ...B, obs: B.obs.length, gross: B.gross.length }));
 ok("бланк: 210 клиентов, 4 грубых (вкл. «1,1,1»)", B.obs.length === 210 && B.gross.length === 4, `${B.obs.length} ${B.gross.length}`);
+{ /* так отдаёт Google: целые — «1.0», «35.0» */
+  const book = await readXlsx(readFileSync(file).buffer.slice(0)); for (const g of Object.values(book)) for (const k of Object.keys(g)) if (/^\d+$/.test(g[k])) g[k] += ".0";
+  const G = parseBlank(book); ok("бланк из Google («1.0» вместо «1») читается так же", G.obs.length === 210 && G.gross.length === 4 && G.station === "А-2", `${G.obs.length} ${G.gross.length} ${G.station}`); }
+if (process.argv[3]) { const T = parseBlank(await readXlsx(readFileSync(process.argv[3]).buffer.slice(0))); ok("пустой актуальный бланк: управляющий не путается с подписью «Проверил:»", !/провер/i.test(T.manager || ""), T.manager); }
 const X = JSON.parse(readFileSync(new URL("./a2.json", import.meta.url)));
 const csv = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");
 const sheet = Object.fromEntries(Object.entries(X).map(([k, v]) => [k, parseCsv(csv(v))]));

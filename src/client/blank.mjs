@@ -38,8 +38,10 @@ export async function readXlsx(buf) {
 }
 const COLS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const rowsOf = g => [...new Set(Object.keys(g).map(k => +k.split("|")[0]))].sort((a, b) => a - b);
-const at = (g, r, c) => String(g[r + "|" + c] ?? "").trim();
-const rightOf = (g, r, c) => { for (let i = COLS.indexOf(c) + 1; i < COLS.length; i++) { const v = at(g, r, COLS[i]); if (v) return v; } return ""; };
+/* Google при выгрузке пишет целые как «1.0» — приводим к «1» */
+const at = (g, r, c) => String(g[r + "|" + c] ?? "").trim().replace(/^(-?\d+)\.0+$/, "$1");
+/* значение справа от подписи; следующая подпись («Проверил:») — не значение */
+const rightOf = (g, r, c) => { for (let i = COLS.indexOf(c) + 1; i < COLS.length; i++) { const v = at(g, r, COLS[i]); if (v) return /:\s*$/.test(v) ? "" : v; } return ""; };
 const findLabel = (g, re) => { for (const k of Object.keys(g)) if (re.test(String(g[k]).trim())) { const [r, c] = k.split("|"); return { r: +r, c }; } return null; };
 const xdate = v => { const s = String(v || "").trim(), m = s.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/); if (m) return `${m[1].padStart(2, "0")}.${m[2].padStart(2, "0")}.${m[3]}`; const n = Number(s); if (Number.isFinite(n) && n > 30000 && n < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + n * 864e5); return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`; } return ""; };
 const xtime = v => { const s = String(v || "").trim(); if (/^\d{1,2}:\d{2}/.test(s)) return s; const n = Number(s); if (Number.isFinite(n) && n > 0 && n < 1) { const t = Math.round(n * 86400); return `${String(Math.floor(t / 3600)).padStart(2, "0")}:${String(Math.floor(t % 3600 / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; } return s; };

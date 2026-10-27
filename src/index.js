@@ -104,7 +104,8 @@ export default {
       const doc = { station, month, checker: S(b.checker).slice(0, 80), manager: S(b.manager).slice(0, 120), file: S(b.file).slice(0, 160), link: /^https:\/\/docs\.google\.com\//.test(b.link || "") ? S(b.link) : "", by: role, at: Date.now(),
         obs: cleanRows(b.obs, 3000), gross: cleanRows(b.gross, 500), shop: cleanRows(b.shop, 20), hash: S(b.hash).slice(0, 40), auto: !!b.auto,
         settings: b.settings && typeof b.settings === "object" ? Object.fromEntries(["norm", "feedback", "training", "gross", "sumFeedback", "sumTraining", "sumMax", "managerShare", "bonusPct", "bonusShare", "bonusMaxGross", "bonusCap"].map(k => [k, Number.isFinite(+b.settings[k]) && b.settings[k] !== null ? +b.settings[k] : null])) : null,
-        fundOpen: Number.isFinite(+b.fundOpen) && b.fundOpen !== null ? Math.round(+b.fundOpen) : null };
+        fundOpen: Number.isFinite(+b.fundOpen) && b.fundOpen !== null ? Math.round(+b.fundOpen) : null,
+        operators: (Array.isArray(b.operators) ? b.operators : []).slice(0, 30).map(x => S(x).slice(0, 80)).filter(Boolean) };
       const key = `up:${station}:${month}`, list = (await idx(env)).filter(x => x.key !== key);
       list.push({ key, station, month, file: doc.file, link: doc.link, by: role, at: doc.at, checker: doc.checker, obs: doc.obs.length, gross: doc.gross.length, shop: doc.shop.length, hash: doc.hash, auto: doc.auto });
       await env.AZS.put(key, JSON.stringify(doc)); await env.AZS.put("up:index", JSON.stringify(list));

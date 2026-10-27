@@ -76,6 +76,17 @@ select.btn { padding-right: 28px; }
 .rv-meta { font-size: 0.76rem; color: var(--ink2); }
 .day { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 8px 14px 4px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink2); border-bottom: 1px solid var(--soft); }
 .src { font-size: 0.72rem; color: var(--ink2); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+/* 📄 печать карточки станции для управляющего — светлая, без кнопок, таблицы целиком */
+#printBox, .print-only { display: none; }
+@media print {
+  :root { --bg: #fff; --panel: #fff; --ink: #000; --ink2: #333; --line: #bbb; --soft: #f1f1f1; color-scheme: light; }
+  body.printing #app, body.printing dialog, body.printing #tip { display: none !important; }
+  body.printing #printBox { display: block; } body.printing .print-only { display: block; }
+  #printBox .dlg { padding: 0; } #printBox .tbl, #printBox div[style*="overflow"] { overflow: visible !important; max-height: none !important; }
+  #printBox table { page-break-inside: auto; } #printBox tr { page-break-inside: avoid; }
+  #printBox .sign { margin-top: 28px; font-size: 0.9rem; display: grid; gap: 18px; }
+  @page { size: A4; margin: 12mm; }
+}
 /* вкладки и таблица отзывов */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
 .tab { border: 0; background: none; padding: 10px 16px; font-weight: 600; color: var(--ink2); border-bottom: 3px solid transparent; cursor: pointer; font-size: 0.95rem; }
@@ -181,6 +192,7 @@ body.tv { font-size: 17px; } body.tv .grid { grid-template-columns: repeat(auto-
 <div class="wrap" id="app"></div>
 <dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
 <div id="tip" role="tooltip"></div>
+<div id="printBox"></div>
 <script type="module">
 import { build, mergeUploads } from "/js/calc.mjs";
 import { readXlsx, parseBlank } from "/js/blank.mjs";
@@ -233,9 +245,9 @@ function card(s) {
   return `<button class="st" data-l="${s.light}" data-code="${esc(s.code)}" type="button" aria-label="Станция ${esc(s.code)}">
     <div class="st-h"><b>${esc(s.code)}</b><span>${esc(s.name || s.manager || "")}</span></div>
     <div class="row" style="font-size:.8rem"><span class="muted">ОСК</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${s.osk ? esc(s.osk) : `<span class="muted">—</span>`}</span></div>
-    <div class="mini">${ring(s.pct, 54, 6)}<div style="display:grid;gap:2px;min-width:0"><span class="muted">стандарт операторов</span>${s.pct == null ? `<span class="muted">проверок нет</span>` : `<b class="${lvl(s.pct)}" style="font-family:var(--f-num)">${s.pct}%</b>`}</div></div>
+    <div class="mini">${ring(s.now.pct, 54, 6)}<div style="display:grid;gap:2px;min-width:0"><span class="muted">стандарт сейчас</span>${s.now.pct == null ? `<span class="muted">проверок нет</span>` : `<b class="${lvl(s.now.pct)}" style="font-family:var(--f-num)">${s.now.pct}%</b>`}${s.now.plan.need ? `<span class="muted" style="font-size:.76rem">план ОСК: ${s.now.plan.done} из ${s.now.plan.need} смен</span>` : ""}</div></div>
     <div class="row"><span>Отзывы</span>${s.reviews ? `<span><span class="stars" aria-hidden="true">${stars(s.rating)}</span> <b>${s.rating.toFixed(1)}</b> <span class="muted">(${s.reviews})</span></span>` : `<span class="muted">нет</span>`}</div>
-    <div class="chips">${s.top ? `<span class="chip" style="color:var(--ok)">⭐ кандидатов ${s.top}</span>` : ""}${s.rechecks.some(r => r.overdue) ? `<span class="chip bad">повторная проверка просрочена</span>` : s.rechecks.some(r => !r.done) ? `<span class="chip warn">повторных проверок ${s.rechecks.filter(r => !r.done).length}</span>` : ""}${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
+    <div class="chips">${s.top ? `<span class="chip" style="color:var(--ok)">⭐ кандидатов ${s.top}</span>` : ""}${s.now.stale ? `<span class="chip warn">давно не проверяли: ${s.now.stale}</span>` : ""}${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
   </button>`;
 }
 const shortAddr = n => String(n || "").replace(/^(АЗС|ЭЗС):\s*/, "").replace(/^г\.\s*Махачкала,\s*/, "").replace(/\s*—.*$/, "") || "станция не указана";
@@ -302,7 +314,7 @@ function render() {
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
   <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
   ${tab === "reviews" && !tv ? reviewsTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
-    <div class="panel"><h3>Стандарт обслуживания · сеть</h3><div class="gauge">${ring(N.pct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.pct)}</b></span><span>норма — 85%</span><span>проверено станций: <b>${N.checked} из ${D.stations.length}</b></span></div></div></div>
+    <div class="panel"><h3>Стандарт обслуживания · сейчас</h3><div class="gauge">${ring(N.nowPct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.nowPct)}</b> <span class="muted">— по 3 последним сменам каждого</span></span><span>норма — 85% · за ${mName(D.month)}: <b>${pct(N.pct)}</b></span><span>план ОСК за месяц: <b>${N.plan.done} из ${N.plan.need}</b> смен${N.plan.need ? ` (${Math.round(N.plan.done / N.plan.need * 100)}%)` : ""}</span>${N.stale ? `<span class="lv-warn">давно не проверяли: ${N.stale} операторов</span>` : ""}</div></div></div>
     <div class="panel"><h3>Оценка посетителей · ${mName(D.month)}</h3>
       <div class="mini"><span class="big" style="color:${stCol(N.rating, 4.5, 4)}">${N.rating == null ? "—" : N.rating.toFixed(1)}</span><span class="muted"><span class="stars" aria-hidden="true">${stars(N.rating)}</span><br>${N.reviews} отзывов, плохих ${N.bad}</span></div>
       <div class="dist">${C.dist.map(x => `<div class="dist-r" ${tip(`${x.stars}★ — ${x.n} отзывов`)}><span>${x.stars}★</span><div class="track"><i style="width:${(x.n / dmax * 100).toFixed(1)}%;background:var(--r${x.stars})"></i></div><span class="num">${x.n}</span></div>`).join("")}</div>
@@ -312,7 +324,7 @@ function render() {
       <div class="${N.gross ? "bad" : "ok"}"><b>${N.gross}</b><small>грубых нарушений</small></div>
       <div class="${N.overdue ? "bad" : N.open ? "warn" : "ok"}"><b>${N.open}</b><small>открытых находок · просрочено ${N.overdue}</small></div>
       <div><b style="font-size:1.05rem">${rub(N.fines)}</b><small>взыскания с операторов</small></div>
-      <div class="${N.rechecksOverdue ? "bad" : N.rechecks ? "warn" : "ok"}"><b>${N.rechecks}</b><small>повторных проверок ждут · просрочено ${N.rechecksOverdue}</small></div>
+      <div class="${N.stale ? "warn" : "ok"}"><b>${N.stale}</b><small>операторов давно не проверяли (больше 30 дней)</small></div>
       <div class="ok"><b>${N.top}</b><small>⭐ кандидатов на поощрение (90 % и выше)</small></div>
       <div style="grid-column:1/-1"><b style="font-size:1.05rem">${rub(N.fund)}</b><small>в резервных фондах станций — на поощрения по итогам квартала</small></div></div></div>
   </section>
@@ -321,7 +333,10 @@ function render() {
     <div class="panel"><h3>Станции по отзывам · ${mName(D.month)} · сначала худшие</h3>${C.byPlace.length ? `<div class="hbar">${C.byPlace.map(p => `<div class="hbar-r" ${tip(`${p.name}: ★${p.avg.toFixed(1)}, отзывов ${p.n}, плохих ${p.bad}`)}><span>${p.code ? `<b>${esc(p.code)}</b>` : esc(p.name)}</span><div class="track"><i style="width:${(p.avg / 5 * 100).toFixed(1)}%;background:${stCol(p.avg, 4.5, 4)}"></i></div><span class="num">★${p.avg.toFixed(1)} · ${p.n}</span></div>`).join("")}</div>` : `<div class="empty">За месяц отзывов нет.</div>`}
       <h3 style="margin-top:10px">Пункты стандарта · сеть</h3>${C.netItems.some(x => x.pct != null) ? `<div class="hbar">${C.netItems.map(x => `<div class="hbar-r" ${tip(`${x.name}: ${pct(x.pct)} (норма 85%)`)}><span>${esc(x.name)}</span><div class="track"><i style="width:${x.pct || 0}%;background:${stCol(x.pct, 85, 70)}"></i><u style="left:85%"></u></div><span class="num">${pct(x.pct)}</span></div>`).join("")}</div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
   </section>
-  <section class="panel" aria-label="Специалисты ОСК"><h3>Специалисты ОСК · кто за какими станциями</h3>${D.specialists.length ? `<div class="spec">${D.specialists.map(x => `<div><b>${esc(x.name)}</b><span class="muted">станций ${x.stations.length} · проверено смен ${x.shifts}${x.pct != null ? ` · средний результат <b class="${lvl(x.pct)}">${x.pct}%</b>` : ""}</span><div class="chips">${x.stations.map(c => { const s = D.stations.find(y => y.code === c); return `<span class="chip" style="border-left:3px solid ${s.light === "red" ? "var(--bad)" : s.light === "yellow" ? "var(--warn)" : s.light === "green" ? "var(--ok)" : "var(--none)"}">${esc(c)}${s.pct != null ? " · " + s.pct + "%" : " · нет проверок"}</span>`; }).join("")}</div></div>`).join("")}</div>` : `<div class="empty">Пока ни за кем не закреплено. Специалист станции берётся из бланка («Проверяющий») или из колонки «Специалист ОСК» листа «Станции».</div>`}
+  <section class="panel" aria-label="Кого проверить в первую очередь"><h3>Кого проверить в первую очередь</h3>${D.focus.length ? `<div class="tbl"><table><thead><tr><th>Станция</th><th>Оператор</th><th>Сейчас</th><th>Тренд</th><th>Последняя проверка</th><th>ОСК</th></tr></thead><tbody>${D.focus.map(o => `<tr><td><a href="#" data-goto="${esc(o.station)}" style="color:inherit"><b>${esc(o.station)}</b></a></td><td>${esc(o.name)}</td><td class="n ${lvl(o.now)}">${pct(o.now)}</td><td class="n">${trendOf(o)}</td><td>${freshOf(o)}</td><td>${esc(o.osk || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Всех операторов проверяли недавно, и ни у кого результат не ниже 70% 👍</div>`}</section>
+  <section class="panel" aria-label="Специалисты ОСК"><h3>Специалисты ОСК · кто за какими станциями</h3>${D.specialists.length ? `<div class="spec">${D.specialists.map(x => `<div><b>${esc(x.name)}</b><span class="muted">станций ${x.stations.length}${x.pct != null ? ` · стандарт сейчас <b class="${lvl(x.pct)}">${x.pct}%</b>` : ""}</span>
+      ${x.plan.need ? `<div style="display:grid;gap:3px"><span class="muted" style="font-size:.8rem">план за ${mName(D.month)}: <b>${x.plan.done} из ${x.plan.need}</b> смен</span><div class="bar" style="--c:${x.plan.done >= x.plan.need ? "var(--ok)" : "var(--brand)"}"><i style="width:${Math.min(100, x.plan.done / x.plan.need * 100)}%"></i></div></div>` : ""}
+      <div class="chips">${x.stations.map(c => { const s = D.stations.find(y => y.code === c); return `<span class="chip" style="border-left:3px solid ${s.light === "red" ? "var(--bad)" : s.light === "yellow" ? "var(--warn)" : s.light === "green" ? "var(--ok)" : "var(--none)"}">${esc(c)}${s.now.pct != null ? " · " + s.now.pct + "%" : " · нет проверок"}${s.now.plan.need ? ` · ${s.now.plan.done}/${s.now.plan.need}` : ""}</span>`; }).join("")}</div></div>`).join("")}</div>` : `<div class="empty">Пока ни за кем не закреплено. Специалист станции берётся из бланка («Проверяющий») или из колонки «Специалист ОСК» листа «Станции».</div>`}
     ${D.stations.filter(s => !s.osk).length && D.specialists.length ? `<div class="muted">Без специалиста: ${D.stations.filter(s => !s.osk).map(s => esc(s.code)).join(", ")}</div>` : ""}</section>
   ${D.unmatched.length ? `<div class="alert hide-tv">Станции в отзывах ещё не сопоставлены с кодами АЗС (${D.unmatched.length}) — поэтому у плиток «Отзывы: нет». Сопоставление делает Claude по вашему ответу.</div>` : ""}
   <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>`}`;
@@ -334,9 +349,12 @@ function render() {
   const f = $("#rf"); if (f) {
     f.querySelectorAll("select, input").forEach(el => el[el.tagName === "INPUT" ? "oninput" : "onchange"] = () => { RF[el.name] = el.value; RF.shown = 60; const pos = el.selectionStart; render(); const n = $(`#rf [name="${el.name}"]`); if (n && el.tagName === "INPUT") { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } });
     const m = $("#rmore"); if (m) m.onclick = () => { RF.shown += 100; render(); };
-    document.querySelectorAll("[data-goto]").forEach(b => b.onclick = e => { e.preventDefault(); openStation(b.dataset.goto); });
   }
+  document.querySelectorAll("[data-goto]").forEach(b => b.onclick = e => { e.preventDefault(); openStation(b.dataset.goto); });
 }
+/* тренд к 3 сменам до этого и свежесть последней проверки */
+const trendOf = o => o.trend == null ? `<span class="muted">—</span>` : o.trend > 2 ? `<span class="lv-ok">↑ +${o.trend}</span>` : o.trend < -2 ? `<span class="lv-bad">↓ ${o.trend}</span>` : `<span class="muted">→ ${o.trend > 0 ? "+" : ""}${o.trend}</span>`;
+const freshOf = o => o.fresh === "never" ? `<span class="lv-bad">ни разу</span>` : `<span class="${o.fresh === "fresh" ? "lv-ok" : o.fresh === "due" ? "lv-warn" : "lv-bad"}">${dd(o.last)} · ${o.days === 0 ? "сегодня" : o.days + " дн. назад"}</span>`;
 /* строка отзыва в таблице: когда · станция · оценка · текст · источник и автор */
 function revRow(r, withStation) {
   const t = RAW.today, y = new Date(Date.parse(t + "T12:00:00Z") - 864e5).toISOString().slice(0, 10), s = r.station && D.stations.find(x => x.code === r.station), k = Math.max(1, Math.min(5, Math.round(r.rating)));
@@ -377,15 +395,17 @@ function openStation(code) {
   const s = D.stations.find(x => x.code === code); if (!s) return;
   const rs = D.reviews.filter(r => r.station === code && (r.date || "").slice(0, 7) === D.month);
   $("#dlg").innerHTML = `<div class="dlg">
-    <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager, s.osk && "ОСК: " + s.osk].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><button class="btn x" type="button" id="close">Закрыть</button></div>
+    <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager, s.osk && "ОСК: " + s.osk].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><button class="btn pri x no-print" type="button" id="pdf">📄 PDF для управляющего</button><button class="btn no-print" type="button" id="close">Закрыть</button></div>
+    <div class="print-only" style="font-size:.85rem;color:var(--ink2)">Отчёт ОСК для управляющего · станция ${esc(s.code)} · ${mName(D.month)} · сформирован ${new Date().toLocaleString("ru-RU")}</div>
     <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-      <div class="kpi"><b class="${lvl(s.pct)}">${pct(s.pct)}</b><small>стандарт операторов</small></div>
+      <div class="kpi"><b class="${lvl(s.now.pct)}">${pct(s.now.pct)}</b><small>стандарт сейчас · по 3 последним сменам</small></div>
+      <div class="kpi"><b class="${lvl(s.pct)}">${pct(s.pct)}</b><small>за ${mName(D.month)} · план ОСК ${s.now.plan.done} из ${s.now.plan.need}</small></div>
       <div class="kpi"><b>${s.rating == null ? "—" : "★ " + s.rating.toFixed(1)}</b><small>отзывы · ${s.reviews}, плохих ${s.bad}</small></div>
       <div class="kpi"><b>${s.gross}</b><small>грубых нарушений</small></div>
       <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.fines)}</b><small>взыскания · управляющему ${rub(s.managerFine)}</small></div>
     </section>
     <div class="cols">
-      <div style="grid-column:1/-1"><h3>Операторы</h3>${s.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Смен</th><th>Стандарт</th><th>Грубых</th><th>Мера</th><th>Повторная проверка</th><th>Взыскание</th></tr></thead><tbody>${s.operators.map(o => `<tr><td>${o.level === "top" ? "⭐ " : ""}${esc(o.name)}</td><td class="n">${o.shifts}</td><td class="n ${lvl(o.pct)}">${pct(o.pct)}</td><td class="n">${o.gross}</td><td class="lv-${o.level === "ok" || o.level === "top" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${esc(o.measure)}</td><td>${o.recheck ? (o.recheck.done ? `<span class="lv-ok">проведена</span>` : `<span class="${o.recheck.overdue ? "lv-bad" : "lv-warn"}">до ${dd(o.recheck.due)}${o.recheck.overdue ? " · просрочена" : ""}</span>`) : `<span class="muted">—</span>`}</td><td class="n">${rub(o.fine)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
+      <div style="grid-column:1/-1"><h3>Операторы · сейчас и за ${mName(D.month)}</h3>${s.now.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Сейчас · 3 смены</th><th>Тренд</th><th>Последняя проверка</th><th>Смен в месяце</th><th>За месяц</th><th>Грубых</th><th>Мера (месяц)</th><th>Взыскание</th></tr></thead><tbody>${s.now.operators.map(n => { const o = s.operators.find(x => x.name === n.name); return `<tr><td>${o?.level === "top" ? "⭐ " : ""}${esc(n.name)}</td><td class="n ${lvl(n.now)}">${pct(n.now)}</td><td class="n">${trendOf(n)}</td><td>${freshOf(n)}</td><td class="n ${n.inMonth >= 3 ? "lv-ok" : ""}">${n.inMonth} из 3</td><td class="n ${lvl(o?.pct)}">${pct(o?.pct ?? null)}</td><td class="n">${o?.gross ?? 0}</td><td class="lv-${!o ? "" : o.level === "ok" || o.level === "top" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${o ? esc(o.measure) : `<span class="muted">—</span>`}</td><td class="n">${o ? rub(o.fine) : "—"}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Проверок нет.</div>`}</div>
       <div style="grid-column:1/-1"><h3>Резервный фонд станции · ${mName(D.month)}</h3>${s.fund ? `<div class="sig" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
         <div><b style="font-size:1.05rem">${rub(s.fund.open)}</b><small>остаток с прошлого месяца</small></div>
         <div><b style="font-size:1.05rem">+ ${rub(s.fund.inOps + s.fund.inMgr)}</b><small>взыскания: операторы ${rub(s.fund.inOps)}, управляющий ${rub(s.fund.inMgr)}</small></div>
@@ -399,6 +419,8 @@ function openStation(code) {
     <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:380px;overflow:auto"><table class="rtab"><thead><tr><th>Когда</th><th>Оценка</th><th>Отзыв</th><th>Источник · автор</th></tr></thead><tbody>${rs.slice(0, 60).map(r => revRow(r, false)).join("")}</tbody></table></div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
   </div>`;
   $("#close").onclick = () => $("#dlg").close();
+  /* 📄 PDF для управляющего: печать карточки станции (в окне печати — «Сохранить как PDF»); подписи — внизу */
+  $("#pdf").onclick = () => { const box = $("#printBox"); box.innerHTML = $("#dlg .dlg").outerHTML + `<div class="sign"><p>С результатом ознакомлен(а), управляющий: ______________________ / ______________ «___» ________ 20__</p><p>Операторы ознакомлены под подпись: ______________________________________________</p></div>`; box.querySelectorAll(".no-print, .rv-text, details").forEach(x => x.classList.contains("no-print") && x.remove()); document.body.classList.add("printing"); window.print(); };
   document.querySelectorAll("#dlg .c-text p").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#dlg").showModal();
 }
@@ -448,6 +470,7 @@ async function saveBlanks() {
 }
 if (!AUTH) loginView(); else { load(); timer = setInterval(() => { if (!$("#dlg").open) load(); }, 60000); }
 $("#dlg").addEventListener("close", () => { if (RAW) render(); });
+window.addEventListener("afterprint", () => { document.body.classList.remove("printing"); $("#printBox").innerHTML = ""; });
 </script>
 </body>
 </html>

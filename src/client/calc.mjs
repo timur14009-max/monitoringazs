@@ -62,6 +62,8 @@ export function mergeUploads(sheet, uploads) {
   S["Станции"] = [...(sheet["Станции"] || []), ...extra].map(s => { const u = (uploads || []).filter(x => x.station === s["Станция"]).sort((a, b) => b.month.localeCompare(a.month))[0]; return u && u.manager && !s["Управляющий"] ? { ...s, "Управляющий": u.manager } : s; });
   /* шкала взысканий станции за месяц — из её бланка (пустые значения — из листа «Настройки») */
   S._cfg = Object.fromEntries((uploads || []).filter(u => u.settings).map(u => [u.station + "|" + u.month, u.settings]));
+  /* список операторов станции из последнего её бланка — для плана проверок (даже тех, кого ещё не смотрели) */
+  S._opsList = {}; for (const u of [...(uploads || [])].sort((a, b) => a.month.localeCompare(b.month))) if ((u.operators || []).length) S._opsList[u.station] = u.operators;
   /* остаток резервного фонда, вписанный в бланк руками, — начальный остаток станции на тот месяц */
   S._fundOpen = Object.fromEntries((uploads || []).filter(u => u.fundOpen != null && Number.isFinite(+u.fundOpen)).map(u => [u.station + "|" + u.month, +u.fundOpen]));
   return S;
@@ -104,6 +106,28 @@ export function build(sheet, reviews, { month, today }) {
     return { operators, items, gross };
   }
   const { operators, items, gross } = monthOps(month);
+  /* 📡 СОСТОЯНИЕ СЕЙЧАС (решение Тимура 27.10 — вместо «повторной проверки через 2 недели»): по каждому оператору — все его смены
+     за все месяцы; «сейчас» = среднее 3 последних смен, тренд — к 3 сменам до них, свежесть — дней с последней проверки
+     (до 14 — свежо, 15–30 — пора, больше 30 — давно); план ОСК — 3 смены на оператора в месяц */
+  const PLAN = 3, NOW_N = 3, dayDiff = (a, b) => Math.round((Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 864e5);
+  const shiftAcc = new Map();
+  for (const r of sheet["Наблюдения"] || []) {
+    const d = isoDate(r["Дата записи"]), code = r["Станция"]; if (!d || !st(code) || d > today) continue;
+    const k = `${code}|${r["Оператор"] || "?"}|${d.slice(0, 7)}|${String(r["Смена"] || "1").trim()}`; let x = shiftAcc.get(k);
+    if (!x) { x = { station: code, name: r["Оператор"] || "?", date: d, done: ITEMS.map(() => 0), appl: ITEMS.map(() => 0) }; shiftAcc.set(k, x); } if (d > x.date) x.date = d;
+    ITEMS.forEach((it, i) => { const m = mark(r[it]); if (m == null) return; x.done[i] += m; x.appl[i] += 1; });
+  }
+  const byOp = new Map(); for (const x of shiftAcc.values()) { const p = shiftPct(x); if (p == null) continue; const k = x.station + "|" + x.name; (byOp.get(k) || byOp.set(k, []).get(k)).push({ date: x.date, pct: p }); }
+  const nowOps = [...byOp.entries()].map(([k, l]) => { l.sort((a, b) => b.date.localeCompare(a.date)); const [station, name] = k.split("|"), cur = avg(l.slice(0, NOW_N).map(x => x.pct)), prev = avg(l.slice(NOW_N, NOW_N * 2).map(x => x.pct)), days = dayDiff(today, l[0].date);
+    return { station, name, now: Math.round(cur), prev: prev == null ? null : Math.round(prev), trend: prev == null ? null : Math.round(cur - prev), last: l[0].date, days, fresh: days <= 14 ? "fresh" : days <= 30 ? "due" : "stale", shifts: l.length, inMonth: l.filter(x => x.date.slice(0, 7) === month).length }; });
+  /* операторы станции «в работе»: проверялись за последние 60 дней или есть в списке последнего бланка станции */
+  const listed = new Map(); for (const [k, v] of Object.entries(sheet._opsList || {})) listed.set(k, v);
+  function nowOf(code) {
+    const known = new Set([...(listed.get(code) || []), ...nowOps.filter(o => o.station === code && o.days <= 60).map(o => o.name)]);
+    const ops = [...known].map(n => nowOps.find(o => o.station === code && o.name === n) || { station: code, name: n, now: null, prev: null, trend: null, last: "", days: null, fresh: "never", shifts: 0, inMonth: 0 });
+    const ps = ops.map(o => o.now).filter(x => x != null), done = ops.reduce((a, o) => a + Math.min(PLAN, o.inMonth), 0);
+    return { pct: ps.length ? Math.round(avg(ps)) : null, operators: ops.sort((a, b) => (a.now ?? -1) - (b.now ?? -1)), plan: { need: ops.length * PLAN, done }, stale: ops.filter(o => o.fresh === "stale" || o.fresh === "never").length };
+  }
   /* 💰 резервный фонд станции: все взыскания (операторы + управляющий) копятся; в 3-м месяце квартала — поощрения:
      средний % за квартал не ниже порога и в каждом месяце не больше N грубых; доля фонда делится поровну, вниз до 10 ₽ (потолок — если задан) */
   const dataMonths = [...new Set((sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)).filter(Boolean))].sort();
@@ -153,12 +177,12 @@ export function build(sheet, reviews, { month, today }) {
     /* светофор: худшее из стандарта, отзывов и просроченных находок */
     const lv = [pct == null ? 0 : pct >= S.norm ? 1 : pct >= S.feedback ? 2 : 3, rating == null ? 0 : rating >= 4.5 ? 1 : rating >= 4 ? 2 : 3, overdue.length ? 3 : open.length ? 2 : 0, g ? 2 : 0];
     const light = ["none", "green", "yellow", "red"][Math.max(...lv)];
-    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * cfgOf(s.code).managerShare), cfg: cfgOf(s.code), fund: fundOf(s.code), top: op.filter(o => o.level === "top").length, rechecks: op.filter(o => o.recheck).map(o => ({ name: o.name, ...o.recheck })), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
+    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * cfgOf(s.code).managerShare), cfg: cfgOf(s.code), fund: fundOf(s.code), top: op.filter(o => o.level === "top").length, now: nowOf(s.code), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
   };
   const cards = stations.map(card);
   /* специалисты ОСК: за кем какие станции, сколько смен проверено за месяц, средний результат их станций */
-  const spec = new Map(); for (const c of cards) if (c.osk) { const x = spec.get(c.osk) || { name: c.osk, stations: [], shifts: 0, pcts: [] }; x.stations.push(c.code); x.shifts += c.operators.reduce((a, o) => a + o.shifts, 0); if (c.pct != null) x.pcts.push(c.pct); spec.set(c.osk, x); }
-  const specialists = [...spec.values()].map(x => ({ name: x.name, stations: x.stations, shifts: x.shifts, pct: x.pcts.length ? Math.round(avg(x.pcts)) : null, unchecked: x.stations.filter(code => !cards.find(c => c.code === code).pct && cards.find(c => c.code === code).pct !== 0) }));
+  const spec = new Map(); for (const c of cards) if (c.osk) { const x = spec.get(c.osk) || { name: c.osk, stations: [], shifts: 0, pcts: [], need: 0, done: 0 }; x.stations.push(c.code); x.shifts += c.operators.reduce((a, o) => a + o.shifts, 0); x.need += c.now.plan.need; x.done += c.now.plan.done; if (c.now.pct != null) x.pcts.push(c.now.pct); spec.set(c.osk, x); }
+  const specialists = [...spec.values()].map(x => ({ name: x.name, stations: x.stations, shifts: x.shifts, plan: { need: x.need, done: x.done }, pct: x.pcts.length ? Math.round(avg(x.pcts)) : null, unchecked: x.stations.filter(code => !cards.find(c => c.code === code).pct && cards.find(c => c.code === code).pct !== 0) }));
   /* для графиков: отзывы по месяцам (12 последних), оценки 1–5 и источники за месяц, станции по отзывам (код или адрес), пункты стандарта по сети */
   const short = n => String(n || "").replace(/^(АЗС|ЭЗС):\s*/, "").replace(/^г\.\s*Махачкала,\s*/, "").replace(/\s*—.*$/, "").trim() || "Станция не указана";
   const months12 = [...Array(12)].map((_, i) => { const d = new Date(Date.parse(month + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() - 11 + i); return d.toISOString().slice(0, 7); });
@@ -172,7 +196,11 @@ export function build(sheet, reviews, { month, today }) {
   return {
     month, settings: S, stations: cards,
     net: { pct: allP.length ? Math.round(avg(allP)) : null, checked: allP.length, rating: allR.length ? Math.round(avg(allR) * 10) / 10 : null, reviews: allR.length, bad: rvM.filter(r => r.rating <= 2).length, badToday: rv.filter(r => r.date === today && r.rating <= 2).length, gross: gross.length, fines: cards.reduce((a, c) => a + c.fines, 0), open: cards.reduce((a, c) => a + c.open, 0), overdue: cards.reduce((a, c) => a + c.overdue, 0),
-      fund: cards.reduce((a, c) => a + (c.fund?.balance || 0), 0), top: cards.reduce((a, c) => a + c.top, 0), rechecks: cards.reduce((a, c) => a + c.rechecks.filter(r => !r.done).length, 0), rechecksOverdue: cards.reduce((a, c) => a + c.rechecks.filter(r => r.overdue).length, 0) },
+      fund: cards.reduce((a, c) => a + (c.fund?.balance || 0), 0), top: cards.reduce((a, c) => a + c.top, 0),
+      nowPct: (p => p.length ? Math.round(avg(p)) : null)(cards.map(c => c.now.pct).filter(x => x != null)), stale: cards.reduce((a, c) => a + c.now.stale, 0),
+      plan: { need: cards.reduce((a, c) => a + c.now.plan.need, 0), done: cards.reduce((a, c) => a + c.now.plan.done, 0) } },
+    /* кого проверить в первую очередь: давно не проверяли или текущий результат ниже обратной связи */
+    focus: cards.flatMap(c => c.now.operators.map(o => ({ ...o, osk: c.osk }))).filter(o => o.fresh === "stale" || o.fresh === "never" || (o.now != null && o.now < S.feedback)).sort((a, b) => ((b.fresh === "never" || b.fresh === "stale") - (a.fresh === "never" || a.fresh === "stale")) || (a.now ?? -1) - (b.now ?? -1)).slice(0, 15),
     reviews: rv.slice(0, 500), unmatched, specialists, charts: { byMonth, dist, bySource, byPlace, netItems },
     months: [...new Set([...(sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)), ...rv.map(r => (r.date || "").slice(0, 7))].filter(Boolean))].sort().reverse(),
   };
