@@ -131,6 +131,12 @@ export default {
       ctx.waitUntil(caches.default.put(ck, new Response(buf, { headers: { "cache-control": "max-age=3000" } })));
       return new Response(buf, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
     }
+    /* ⬇ пустой бланк станции (Excel с уже вписанным кодом станции): KV tpl:<станция> */
+    if (p === "/api/template") {
+      const st = String(url.searchParams.get("st") || ""); if (!/^А-\d{1,3}$/.test(st)) return json({ error: "нет такой станции" }, 400);
+      const buf = await env.AZS.get("tpl:" + st, "arrayBuffer"); if (!buf) return json({ error: "бланка для этой станции нет" }, 404);
+      return new Response(buf, { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent("Бланк ОСК " + st + ".xlsx")}`, "cache-control": "no-store" } });
+    }
     /* подключить таблицу станции заранее (бланк ещё пустой): ссылка — в автообновление, данные появятся, когда её заполнят */
     if (p === "/api/link" && req.method === "POST") {
       const b = await req.json().catch(() => ({})), link = String(b.link || ""), station = String(b.station || "");
