@@ -2,7 +2,7 @@
 // Формулы — как в бланке ОСК: процент смены = среднее процентов 7 пунктов (по каждому пункту выполнено / применимо, н/п не считается,
 // пункт без применимых — пропускается), за месяц — среднее смен,
 // взыскание — по шкале от среднего + за каждое грубое нарушение, штраф управляющего — доля от взысканий операторов станции.
-import { REVIEW_MAP } from "./map.js";
+import { REVIEW_MAP, STATION_NAMES } from "./map.js";
 export const ITEMS = ["Поприветствовал", "Уточнил заказ", "Уточнил способ оплаты", "Спросил про карту лояльности", "Предложил оформить карту", "Озвучил сумму и сдачу", "Попрощался"];
 
 /* CSV (как отдаёт Google: кавычки, переводы строк внутри) → массив объектов по заголовкам */
@@ -49,7 +49,8 @@ export function build(sheet, reviews, { month, today }) {
   const S = settings(sheet["Настройки"]), inM = d => d && d.slice(0, 7) === month;
   const stations = (sheet["Станции"] || []).filter(s => s["Станция"] && !/^нет$/i.test(s["Работает"] || "")).map(s => ({ code: s["Станция"], type: s["Тип"] || "АЗС", name: s["Адрес / название"] || "", manager: s["Управляющий"] || "", reviewName: s["Название в отзывах"] || "" }));
   /* станции, известные только по отзывам (их нет в листе ОСК, например А-5, А-24), — тоже плитки: отзывы есть, проверок нет */
-  for (const [addr, code] of REVIEW_MAP) { const st0 = stations.find(s => s.code === code); if (!st0) stations.push({ code, type: "АЗС", name: addr, manager: "", reviewName: "" }); else if (!st0.name) st0.name = addr; }
+  for (const code of new Set([...REVIEW_MAP.map(x => x[1]), ...Object.keys(STATION_NAMES)])) if (!stations.some(s => s.code === code)) stations.push({ code, type: "АЗС", name: "", manager: "", reviewName: "" });
+  for (const s of stations) if (!s.name && STATION_NAMES[s.code]) s.name = STATION_NAMES[s.code];
   stations.sort((a, b) => (parseInt(a.code.replace(/\D/g, "")) || 999) - (parseInt(b.code.replace(/\D/g, "")) || 999));
   const byCode = new Map(stations.map(s => [s.code, s]));
   const st = code => byCode.get(code) || null;
