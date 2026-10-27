@@ -85,6 +85,9 @@ select.btn { padding-right: 28px; }
   #printBox .dlg { padding: 0; } #printBox .tbl, #printBox div[style*="overflow"] { overflow: visible !important; max-height: none !important; }
   #printBox table { page-break-inside: auto; } #printBox tr { page-break-inside: avoid; }
   #printBox .sign { margin-top: 28px; font-size: 0.9rem; display: grid; gap: 18px; }
+  #printBox .pbreak { page-break-before: always; break-before: page; }
+  #printBox .kpis { grid-template-columns: repeat(4, 1fr) !important; } #printBox table { font-size: 0.8rem; } #printBox th, #printBox td { padding: 4px 6px; white-space: normal; }
+  #printBox .rtab .c-text p { -webkit-line-clamp: unset; display: block; }
   @page { size: A4; margin: 12mm; }
 }
 /* вкладки и таблица отзывов */
@@ -314,7 +317,7 @@ function render() {
   <header><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
     <span class="muted" id="status">обновлено ${new Date(D.at).toTimeString().slice(0, 5)} · само каждую минуту${SYNC.note ? " · " + SYNC.note : ""}</span>
     <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
-    <button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
+    <button class="btn hide-tv" id="pdfAll" type="button" title="Отчёт по всей сети за выбранный месяц: сводка, все АЗС, кого проверить, каждая станция с новой страницы">📄 PDF по сети</button><button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
   <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="rating" aria-selected="${tab === "rating"}">Рейтинг</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
   ${tab === "reviews" && !tv ? reviewsTab() : tab === "rating" && !tv ? ratingTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
@@ -345,7 +348,7 @@ function render() {
   ${D.unmatched.length ? `<div class="alert hide-tv">Станции в отзывах ещё не сопоставлены с кодами АЗС (${D.unmatched.length}) — поэтому у плиток «Отзывы: нет». Сопоставление делает Claude по вашему ответу.</div>` : ""}
   <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>`}`;
   $("#month").onchange = e => { month = e.target.value; RF.shown = 60; compute(); render(); };
-  $("#up").onclick = openUpload;
+  $("#up").onclick = openUpload; $("#pdfAll").onclick = printNetwork;
   $("#tv").onclick = () => { tv = !tv; document.body.classList.toggle("tv", tv); render(); };
   document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.tab; try { localStorage.setItem("azs-tab", tab); } catch {} render(); });
   document.querySelectorAll(".st").forEach(b => b.onclick = () => openStation(b.dataset.code));
@@ -419,10 +422,11 @@ function reviewsTab() {
 }
 /* подсказка при наведении на столбик, строку или точку */
 document.addEventListener("mousemove", e => { const t = e.target.closest && e.target.closest("[data-tip]"), el = $("#tip"); if (!el) return; if (!t) { el.style.display = "none"; return; } el.textContent = t.getAttribute("data-tip"); el.style.display = "block"; const x = Math.min(e.clientX + 14, innerWidth - el.offsetWidth - 8), y = e.clientY + 16 + el.offsetHeight > innerHeight ? e.clientY - el.offsetHeight - 10 : e.clientY + 16; el.style.left = x + "px"; el.style.top = y + "px"; });
-function openStation(code) {
-  const s = D.stations.find(x => x.code === code); if (!s) return;
+/* карточка станции — одна разметка для окна на экране, для PDF станции и для общего PDF по сети */
+function stationHtml(code) {
+  const s = D.stations.find(x => x.code === code); if (!s) return "";
   const rs = D.reviews.filter(r => r.station === code && (r.date || "").slice(0, 7) === D.month);
-  $("#dlg").innerHTML = `<div class="dlg">
+  return `<div class="dlg">
     <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager, s.osk && "ОСК: " + s.osk].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><a class="btn x no-print" href="/api/template?st=${encodeURIComponent(s.code)}">⬇ Бланк станции</a><button class="btn pri no-print" type="button" id="pdf">📄 PDF для управляющего</button><button class="btn no-print" type="button" id="close">Закрыть</button></div>
     <div class="print-only" style="font-size:.85rem;color:var(--ink2)">Отчёт ОСК для управляющего · станция ${esc(s.code)} · ${mName(D.month)} · сформирован ${new Date().toLocaleString("ru-RU")}</div>
     <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
@@ -446,9 +450,28 @@ function openStation(code) {
     </div>
     <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:380px;overflow:auto"><table class="rtab"><thead><tr><th>Когда</th><th>Оценка</th><th>Отзыв</th><th>Источник · автор</th></tr></thead><tbody>${rs.slice(0, 60).map(r => revRow(r, false)).join("")}</tbody></table></div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
   </div>`;
+}
+const SIGN = `<div class="sign"><p>С результатом ознакомлен(а), управляющий: ______________________ / ______________ «___» ________ 20__</p><p>Операторы ознакомлены под подпись: ______________________________________________</p></div>`;
+/* печать: собранная разметка → «Сохранить как PDF» в окне печати */
+function printHtml(h) { const box = $("#printBox"); box.innerHTML = h; box.querySelectorAll(".no-print").forEach(x => x.remove()); box.querySelectorAll(".print-only").forEach(x => x.style.display = "block"); document.body.classList.add("printing"); setTimeout(() => window.print(), 50); }
+/* 📄 PDF по сети: сводка, все АЗС таблицей, кого проверить, затем каждая станция с данными — с новой страницы */
+function printNetwork() {
+  const N = D.net, list = [...D.stations].sort((a, b) => (a.code.replace(/\D/g, "") - b.code.replace(/\D/g, ""))), withData = list.filter(s => s.now.pct != null || s.pct != null || s.reviews);
+  const head = `<div class="dlg"><div class="dlg-h"><h2>Мониторинг АЗС · сеть · ${mName(D.month)}</h2></div><div style="font-size:.85rem">Сформирован ${new Date().toLocaleString("ru-RU")} · станций ${list.length}, с данными ${withData.length}</div>
+    <section class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><b>${pct(N.nowPct)}</b><small>стандарт сейчас · по 3 последним сменам</small></div>
+      <div class="kpi"><b>${pct(N.pct)}</b><small>стандарт за ${mName(D.month)} · план ОСК ${N.plan.done} из ${N.plan.need}</small></div>
+      <div class="kpi"><b>${N.rating == null ? "—" : "★ " + N.rating.toFixed(1)}</b><small>отзывы · ${N.reviews}, плохих ${N.bad}</small></div>
+      <div class="kpi"><b>${N.gross}</b><small>грубых · взыскания ${rub(N.fines)} · фонды ${rub(N.fund)}</small></div></section>
+    <h3>Все станции</h3><table><thead><tr><th>АЗС</th><th>Управляющий</th><th>ОСК</th><th>Сейчас</th><th>За месяц</th><th>План ОСК</th><th>Грубых</th><th>Взыскания</th><th>Отзывы</th></tr></thead><tbody>${list.map(s => `<tr><td><b>${esc(s.code)}</b> ${esc(s.name || "")}</td><td>${esc(s.manager || "—")}</td><td>${esc(s.osk || "—")}</td><td class="n">${pct(s.now.pct)}</td><td class="n">${pct(s.pct)}</td><td class="n">${s.now.plan.need ? s.now.plan.done + " из " + s.now.plan.need : "—"}</td><td class="n">${s.gross}</td><td class="n">${rub(s.fines)}</td><td class="n">${s.reviews ? "★" + s.rating.toFixed(1) + " · " + s.reviews : "—"}</td></tr>`).join("")}</tbody></table>
+    ${D.focus.length ? `<h3>Кого проверить в первую очередь</h3><table><thead><tr><th>АЗС</th><th>Оператор</th><th>Сейчас</th><th>Последняя проверка</th><th>ОСК</th></tr></thead><tbody>${D.focus.map(o => `<tr><td>${esc(o.station)}</td><td>${esc(o.name)}</td><td class="n">${pct(o.now)}</td><td>${o.last ? dd(o.last) + " · " + o.days + " дн. назад" : "ни разу"}</td><td>${esc(o.osk || "—")}</td></tr>`).join("")}</tbody></table>` : ""}</div>`;
+  printHtml(head + withData.map(s => `<div class="pbreak"></div>` + stationHtml(s.code) + SIGN).join(""));
+}
+function openStation(code) {
+  const h = stationHtml(code); if (!h) return; $("#dlg").innerHTML = h;
   $("#close").onclick = () => $("#dlg").close();
-  /* 📄 PDF для управляющего: печать карточки станции (в окне печати — «Сохранить как PDF»); подписи — внизу */
-  $("#pdf").onclick = () => { const box = $("#printBox"); box.innerHTML = $("#dlg .dlg").outerHTML + `<div class="sign"><p>С результатом ознакомлен(а), управляющий: ______________________ / ______________ «___» ________ 20__</p><p>Операторы ознакомлены под подпись: ______________________________________________</p></div>`; box.querySelectorAll(".no-print, .rv-text, details").forEach(x => x.classList.contains("no-print") && x.remove()); document.body.classList.add("printing"); window.print(); };
+  /* 📄 PDF для управляющего: карточка станции + строки для подписей */
+  $("#pdf").onclick = () => printHtml(stationHtml(code) + SIGN);
   document.querySelectorAll("#dlg .c-text p").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#dlg").showModal();
 }
