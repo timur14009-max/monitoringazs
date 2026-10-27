@@ -76,6 +76,35 @@ select.btn { padding-right: 28px; }
 .rv-meta { font-size: 0.76rem; color: var(--ink2); }
 .day { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 8px 14px 4px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink2); border-bottom: 1px solid var(--soft); }
 .src { font-size: 0.72rem; color: var(--ink2); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+/* вкладки и таблица отзывов */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: none; padding: 10px 16px; font-weight: 600; color: var(--ink2); border-bottom: 3px solid transparent; cursor: pointer; font-size: 0.95rem; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--brand); }
+.tab .n { font: 500 0.75rem var(--f-num); color: var(--ink2); margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--soft); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.filters label { display: grid; gap: 3px; font-size: 0.76rem; color: var(--ink2); }
+.filters select, .filters input { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 14px; }
+.filters input { min-width: 200px; }
+.rsum { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.88rem; color: var(--ink2); align-items: center; }
+.rsum b { color: var(--ink); font-family: var(--f-num); }
+.rtab { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.rtab th { background: var(--soft); text-align: left; font-size: 0.74rem; font-weight: 600; color: var(--ink2); padding: 9px 12px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.rtab td { padding: 10px 12px; border-top: 1px solid var(--soft); border-bottom: 0; vertical-align: top; font-size: 0.9rem; white-space: normal; text-align: left; }
+.rtab tr.bad td { background: color-mix(in srgb, var(--bad) 5%, var(--panel)); }
+.rtab tr.bad td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.rtab .c-date { white-space: nowrap; font-family: var(--f-num); font-size: 0.82rem; color: var(--ink2); width: 92px; }
+.rtab .c-date b { display: block; color: var(--ink); font-family: var(--f-body); font-size: 0.9rem; }
+.rtab .c-st { width: 190px; } .rtab .c-st b { display: block; } .rtab .c-st span { font-size: 0.78rem; color: var(--ink2); }
+.rtab .c-rate { width: 64px; } .rtab .c-src { width: 140px; font-size: 0.82rem; color: var(--ink2); }
+.rtab .c-text p { margin: 0; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.rtab .c-text p.open { -webkit-line-clamp: unset; display: block; }
+.more { justify-self: center; }
+@media (max-width: 760px) {
+  .rtab thead { display: none; } .rtab, .rtab tbody, .rtab td { display: block; width: auto !important; }
+  .rtab tr { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; padding: 8px 4px; border-top: 1px solid var(--line); }
+  .rtab td { border: 0; padding: 2px 8px; } .rtab .c-rate { grid-column: 1; grid-row: 1; } .rtab .c-st { grid-column: 2; grid-row: 1; } .rtab .c-date { grid-column: 3; grid-row: 1; text-align: right; }
+  .rtab .c-text, .rtab .c-src { grid-column: 1 / -1; } .rtab tr.bad td:first-child { box-shadow: none; } .rtab tr.bad { box-shadow: inset 3px 0 0 var(--bad); background: color-mix(in srgb, var(--bad) 5%, var(--panel)); } .rtab tr.bad td { background: none; }
+}
 .spec { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 10px; }
 .spec > div { border-radius: 12px; background: var(--soft); padding: 12px 14px; display: grid; gap: 6px; }
 .spec b { font-size: 1rem; } .spec .chips .chip { background: var(--panel); }
@@ -166,8 +195,8 @@ const SRC = { telegram: "Telegram", "2gis": "2ГИС", yandex: "Яндекс", g
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const mName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
 const dd = d => d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
-let RAW = null, D = null, month = "", onlyBad = false, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
-try { onlyBad = localStorage.getItem("azs-bad") === "1"; } catch {}
+let RAW = null, D = null, month = "", tab = "overview", RF = { st: "", rate: "", src: "", per: "month", q: "", sort: "new", shown: 60 }, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
+try { tab = localStorage.getItem("azs-tab") === "reviews" ? "reviews" : "overview"; } catch {}
 if (tv) document.body.classList.add("tv");
 
 function loginView() {
@@ -178,8 +207,27 @@ function loginView() {
 /* данные сырые — считаем здесь (бланки станций поверх таблицы ОСК, отзывы), месяц меняется без запроса к серверу */
 function compute() { D = { ...build(mergeUploads(RAW.sheet || {}, RAW.uploads || []), RAW.reviews || [], { month: month || RAW.today.slice(0, 7), today: RAW.today }), errors: RAW.errors || [], at: RAW.at, uploadIndex: RAW.uploadIndex || [] }; month = D.month; }
 async function load() {
-  try { const r = await fetch("/api/data", { cache: "no-store" }); if (r.status === 401) { location.reload(); return; } RAW = await r.json(); compute(); if (!$("#dlg").open) render(); }
+  try { const r = await fetch("/api/data", { cache: "no-store" }); if (r.status === 401) { location.reload(); return; } RAW = await r.json(); compute(); if (!$("#dlg").open) render(); autoSync(); }
   catch (e) { console.error(e); const a = $("#status"); if (a) a.textContent = "Нет связи — показаны прежние данные"; }
+}
+/* отпечаток содержимого бланка: сохраняем, только если в таблице что-то поменялось */
+const hashOf = B => { const s = JSON.stringify([B.obs, B.gross, B.shop, B.settings, B.fundOpen]); let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + s.length.toString(36); };
+/* 🔄 автообновление: Google-таблицы станций (ссылки из «📤 Бланк ОСК») раз в час, пока экран открыт хоть у кого-то */
+const SYNC = { busy: false, note: "" };
+async function autoSync(force = false) {
+  if (SYNC.busy || !RAW?.links?.length) return; let last = 0; try { last = +localStorage.getItem("azs-sync") || 0; } catch {}
+  if (!force && Date.now() - last < 55 * 60e3) return;
+  SYNC.busy = true; try { localStorage.setItem("azs-sync", String(Date.now())); } catch {}
+  let changed = 0, failed = 0;
+  for (const L of RAW.links) {
+    try { const r = await fetch("/api/gsheet?link=" + encodeURIComponent(L.link) + (force ? "&fresh=1" : "")); if (!r.ok) { failed++; continue; }
+      const B = parseBlank(await readXlsx(await r.arrayBuffer())); if (!B.station || !B.month || !B.obs.length) continue;
+      const h = hashOf(B), was = (RAW.uploadIndex || []).find(x => x.key === `up:${B.station}:${B.month}`); if (was && was.hash === h) continue;
+      const s = await fetch("/api/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...B, file: "Google-таблица", link: L.link, hash: h, auto: true }) }); if (s.ok) changed++; else failed++;
+    } catch { failed++; }
+  }
+  SYNC.busy = false; SYNC.note = `таблицы станций проверены в ${new Date().toTimeString().slice(0, 5)}${changed ? ` · обновлено ${changed}` : ""}${failed ? ` · не открылось ${failed}` : ""}`;
+  if (changed) await load(); else if (!$("#dlg").open) render();
 }
 function card(s) {
   return `<button class="st" data-l="${s.light}" data-code="${esc(s.code)}" type="button" aria-label="Станция ${esc(s.code)}">
@@ -187,7 +235,7 @@ function card(s) {
     <div class="row" style="font-size:.8rem"><span class="muted">ОСК</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${s.osk ? esc(s.osk) : `<span class="muted">—</span>`}</span></div>
     <div class="mini">${ring(s.pct, 54, 6)}<div style="display:grid;gap:2px;min-width:0"><span class="muted">стандарт операторов</span>${s.pct == null ? `<span class="muted">проверок нет</span>` : `<b class="${lvl(s.pct)}" style="font-family:var(--f-num)">${s.pct}%</b>`}</div></div>
     <div class="row"><span>Отзывы</span>${s.reviews ? `<span><span class="stars" aria-hidden="true">${stars(s.rating)}</span> <b>${s.rating.toFixed(1)}</b> <span class="muted">(${s.reviews})</span></span>` : `<span class="muted">нет</span>`}</div>
-    <div class="chips">${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
+    <div class="chips">${s.top ? `<span class="chip" style="color:var(--ok)">⭐ кандидатов ${s.top}</span>` : ""}${s.rechecks.some(r => r.overdue) ? `<span class="chip bad">повторная проверка просрочена</span>` : s.rechecks.some(r => !r.done) ? `<span class="chip warn">повторных проверок ${s.rechecks.filter(r => !r.done).length}</span>` : ""}${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
   </button>`;
 }
 const shortAddr = n => String(n || "").replace(/^(АЗС|ЭЗС):\s*/, "").replace(/^г\.\s*Махачкала,\s*/, "").replace(/\s*—.*$/, "") || "станция не указана";
@@ -245,14 +293,15 @@ function ratingChart(rows) {
 const SRCC = { telegram: "var(--s1)", "2gis": "var(--s2)", yandex: "var(--s3)", google: "var(--s4)", other: "var(--none)" };
 function render() {
   const N = D.net, C = D.charts, list = [...D.stations].sort((a, b) => ORDER[a.light] - ORDER[b.light] || (a.pct ?? 999) - (b.pct ?? 999) || (a.rating ?? 9) - (b.rating ?? 9));
-  const rv = D.reviews.filter(r => (r.date || "").slice(0, 7) === D.month && (!onlyBad || r.rating <= 2)), dmax = Math.max(1, ...C.dist.map(x => x.n)), stot = C.bySource.reduce((a, x) => a + x.n, 0);
+  const dmax = Math.max(1, ...C.dist.map(x => x.n)), stot = C.bySource.reduce((a, x) => a + x.n, 0), inMonth = D.reviews.filter(r => (r.date || "").slice(0, 7) === D.month).length;
   $("#app").innerHTML = `
   <header><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
-    <span class="muted" id="status">обновлено ${new Date(D.at).toTimeString().slice(0, 5)} · само каждую минуту</span>
+    <span class="muted" id="status">обновлено ${new Date(D.at).toTimeString().slice(0, 5)} · само каждую минуту${SYNC.note ? " · " + SYNC.note : ""}</span>
     <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
     <button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
-  <section class="hero" aria-label="Сеть за ${mName(D.month)}">
+  <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
+  ${tab === "reviews" && !tv ? reviewsTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
     <div class="panel"><h3>Стандарт обслуживания · сеть</h3><div class="gauge">${ring(N.pct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.pct)}</b></span><span>норма — 85%</span><span>проверено станций: <b>${N.checked} из ${D.stations.length}</b></span></div></div></div>
     <div class="panel"><h3>Оценка посетителей · ${mName(D.month)}</h3>
       <div class="mini"><span class="big" style="color:${stCol(N.rating, 4.5, 4)}">${N.rating == null ? "—" : N.rating.toFixed(1)}</span><span class="muted"><span class="stars" aria-hidden="true">${stars(N.rating)}</span><br>${N.reviews} отзывов, плохих ${N.bad}</span></div>
@@ -262,7 +311,10 @@ function render() {
       <div class="${N.badToday ? "bad" : "ok"}"><b>${N.badToday}</b><small>плохих отзывов сегодня</small></div>
       <div class="${N.gross ? "bad" : "ok"}"><b>${N.gross}</b><small>грубых нарушений</small></div>
       <div class="${N.overdue ? "bad" : N.open ? "warn" : "ok"}"><b>${N.open}</b><small>открытых находок · просрочено ${N.overdue}</small></div>
-      <div><b style="font-size:1.05rem">${rub(N.fines)}</b><small>взыскания с операторов</small></div></div></div>
+      <div><b style="font-size:1.05rem">${rub(N.fines)}</b><small>взыскания с операторов</small></div>
+      <div class="${N.rechecksOverdue ? "bad" : N.rechecks ? "warn" : "ok"}"><b>${N.rechecks}</b><small>повторных проверок ждут · просрочено ${N.rechecksOverdue}</small></div>
+      <div class="ok"><b>${N.top}</b><small>⭐ кандидатов на поощрение (90 % и выше)</small></div>
+      <div style="grid-column:1/-1"><b style="font-size:1.05rem">${rub(N.fund)}</b><small>в резервных фондах станций — на поощрения по итогам квартала</small></div></div></div>
   </section>
   <section class="charts">
     <div class="panel chart"><h3>Отзывы по месяцам</h3><div class="legend"><span><i style="background:var(--brand);opacity:.75"></i>3–5★</span><span><i style="background:var(--bad)"></i>плохие, 1–2★</span></div>${monthChart(C.byMonth)}<h3 style="margin-top:6px">Средняя оценка</h3>${ratingChart(C.byMonth)}</div>
@@ -272,17 +324,52 @@ function render() {
   <section class="panel" aria-label="Специалисты ОСК"><h3>Специалисты ОСК · кто за какими станциями</h3>${D.specialists.length ? `<div class="spec">${D.specialists.map(x => `<div><b>${esc(x.name)}</b><span class="muted">станций ${x.stations.length} · проверено смен ${x.shifts}${x.pct != null ? ` · средний результат <b class="${lvl(x.pct)}">${x.pct}%</b>` : ""}</span><div class="chips">${x.stations.map(c => { const s = D.stations.find(y => y.code === c); return `<span class="chip" style="border-left:3px solid ${s.light === "red" ? "var(--bad)" : s.light === "yellow" ? "var(--warn)" : s.light === "green" ? "var(--ok)" : "var(--none)"}">${esc(c)}${s.pct != null ? " · " + s.pct + "%" : " · нет проверок"}</span>`; }).join("")}</div></div>`).join("")}</div>` : `<div class="empty">Пока ни за кем не закреплено. Специалист станции берётся из бланка («Проверяющий») или из колонки «Специалист ОСК» листа «Станции».</div>`}
     ${D.stations.filter(s => !s.osk).length && D.specialists.length ? `<div class="muted">Без специалиста: ${D.stations.filter(s => !s.osk).map(s => esc(s.code)).join(", ")}</div>` : ""}</section>
   ${D.unmatched.length ? `<div class="alert hide-tv">Станции в отзывах ещё не сопоставлены с кодами АЗС (${D.unmatched.length}) — поэтому у плиток «Отзывы: нет». Сопоставление делает Claude по вашему ответу.</div>` : ""}
-  <div class="main">
-    <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>
-    <aside class="feed" aria-label="Отзывы"><div class="feed-h"><b>Отзывы · ${mName(D.month)}</b><button class="btn" id="bad" type="button" aria-pressed="${onlyBad}">Только плохие</button></div>
-      <div class="feed-l">${rv.length ? feedHtml(rv.slice(0, 150)) : `<div class="empty" style="padding:14px">${onlyBad ? "Плохих отзывов за месяц нет 👍" : "За этот месяц отзывов нет."}</div>`}</div></aside>
-  </div>`;
-  $("#month").onchange = e => { month = e.target.value; compute(); render(); };
+  <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>`}`;
+  $("#month").onchange = e => { month = e.target.value; RF.shown = 60; compute(); render(); };
   $("#up").onclick = openUpload;
-  document.querySelectorAll(".rv-text").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#tv").onclick = () => { tv = !tv; document.body.classList.toggle("tv", tv); render(); };
-  $("#bad").onclick = () => { onlyBad = !onlyBad; try { localStorage.setItem("azs-bad", onlyBad ? "1" : "0"); } catch {} render(); };
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.tab; try { localStorage.setItem("azs-tab", tab); } catch {} render(); });
   document.querySelectorAll(".st").forEach(b => b.onclick = () => openStation(b.dataset.code));
+  document.querySelectorAll(".c-text p").forEach(p => p.onclick = () => p.classList.toggle("open"));
+  const f = $("#rf"); if (f) {
+    f.querySelectorAll("select, input").forEach(el => el[el.tagName === "INPUT" ? "oninput" : "onchange"] = () => { RF[el.name] = el.value; RF.shown = 60; const pos = el.selectionStart; render(); const n = $(`#rf [name="${el.name}"]`); if (n && el.tagName === "INPUT") { n.focus(); try { n.setSelectionRange(pos, pos); } catch {} } });
+    const m = $("#rmore"); if (m) m.onclick = () => { RF.shown += 100; render(); };
+    document.querySelectorAll("[data-goto]").forEach(b => b.onclick = e => { e.preventDefault(); openStation(b.dataset.goto); });
+  }
+}
+/* строка отзыва в таблице: когда · станция · оценка · текст · источник и автор */
+function revRow(r, withStation) {
+  const t = RAW.today, y = new Date(Date.parse(t + "T12:00:00Z") - 864e5).toISOString().slice(0, 10), s = r.station && D.stations.find(x => x.code === r.station), k = Math.max(1, Math.min(5, Math.round(r.rating)));
+  return `<tr class="${r.rating <= 2 ? "bad" : ""}"><td class="c-date"><b>${r.date === t ? "Сегодня" : r.date === y ? "Вчера" : dd(r.date)}</b>${esc(r.time || "")}</td>
+    ${withStation ? `<td class="c-st">${r.station ? `<b><a href="#" data-goto="${esc(r.station)}" style="color:inherit">${esc(r.station)}</a></b><span>${esc(s?.name || shortAddr(r.stationName))}</span>` : `<span>${esc(shortAddr(r.stationName))}</span>`}</td>` : ""}
+    <td class="c-rate"><span class="rate r${k}" aria-label="${r.rating} из 5">${r.rating}★</span></td>
+    <td class="c-text"><p>${esc(r.text || "Без текста")}</p></td>
+    <td class="c-src">${esc(SRC[r.source] || r.source)}${r.author ? `<br>${esc(r.author)}` : ""}</td></tr>`;
+}
+/* вкладка «Отзывы»: таблица на всю ширину, фильтры — станция, оценка, источник, период, поиск по тексту */
+function reviewsTab() {
+  const t = RAW.today, w = new Date(Date.parse(t + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10), q = RF.q.trim().toLowerCase();
+  const inPer = r => RF.per === "all" ? true : RF.per === "week" ? r.date >= w : (r.date || "").slice(0, 7) === D.month;
+  const base = D.reviews.filter(inPer), stCount = {}; for (const r of base) { const k = r.station || "—"; stCount[k] = (stCount[k] || 0) + 1; }
+  let list = base.filter(r => (!RF.st || (r.station || "—") === RF.st) && (!RF.rate || (RF.rate === "bad" ? r.rating <= 2 : RF.rate === "mid" ? r.rating === 3 : r.rating >= 4)) && (!RF.src || r.source === RF.src) && (!q || (r.text + " " + r.author + " " + r.stationName).toLowerCase().includes(q)));
+  list = RF.sort === "worst" ? [...list].sort((a, b) => a.rating - b.rating || String(b.date + b.time).localeCompare(a.date + a.time)) : list;
+  const avgR = list.length ? (list.reduce((a, r) => a + r.rating, 0) / list.length).toFixed(1) : "—", bad = list.filter(r => r.rating <= 2).length;
+  const opt = (name, v, label) => `<option value="${v}" ${RF[name] === v ? "selected" : ""}>${label}</option>`;
+  const codes = Object.keys(stCount).sort((a, b) => (parseInt(a.replace(/\D/g, "")) || 999) - (parseInt(b.replace(/\D/g, "")) || 999));
+  const row = r => revRow(r, true);
+  return `<section class="panel" style="gap:12px">
+    <form class="filters" id="rf" onsubmit="return false">
+      <label>Период<select name="per">${opt("per", "month", mName(D.month))}${opt("per", "week", "последние 7 дней")}${opt("per", "all", "все загруженные")}</select></label>
+      <label>Станция<select name="st">${opt("st", "", "все станции")}${codes.map(c => opt("st", c, `${c === "—" ? "без станции" : c} (${stCount[c]})`)).join("")}</select></label>
+      <label>Оценка<select name="rate">${opt("rate", "", "все")}${opt("rate", "bad", "плохие 1–2★")}${opt("rate", "mid", "средние 3★")}${opt("rate", "good", "хорошие 4–5★")}</select></label>
+      <label>Источник<select name="src">${opt("src", "", "все")}${Object.entries(SRC).map(([k, v]) => opt("src", k, v)).join("")}</select></label>
+      <label>Порядок<select name="sort">${opt("sort", "new", "сначала новые")}${opt("sort", "worst", "сначала худшие")}</select></label>
+      <label>Поиск по тексту<input name="q" type="search" value="${esc(RF.q)}" placeholder="газ, касса, вежливо…" autocomplete="off"></label>
+    </form>
+    <div class="rsum">Найдено <b>${list.length}</b> · средняя <b>★${avgR}</b> · плохих <b style="color:var(--bad)">${bad}</b></div>
+    ${list.length ? `<div style="overflow-x:auto"><table class="rtab"><thead><tr><th>Когда</th><th>Станция</th><th>Оценка</th><th>Отзыв</th><th>Источник · автор</th></tr></thead><tbody>${list.slice(0, RF.shown).map(row).join("")}</tbody></table></div>
+      ${list.length > RF.shown ? `<button class="btn more" id="rmore" type="button">Показать ещё ${Math.min(100, list.length - RF.shown)} из ${list.length - RF.shown}</button>` : ""}` : `<div class="empty">По этим условиям отзывов нет.</div>`}
+  </section>`;
 }
 /* подсказка при наведении на столбик, строку или точку */
 document.addEventListener("mousemove", e => { const t = e.target.closest && e.target.closest("[data-tip]"), el = $("#tip"); if (!el) return; if (!t) { el.style.display = "none"; return; } el.textContent = t.getAttribute("data-tip"); el.style.display = "block"; const x = Math.min(e.clientX + 14, innerWidth - el.offsetWidth - 8), y = e.clientY + 16 + el.offsetHeight > innerHeight ? e.clientY - el.offsetHeight - 10 : e.clientY + 16; el.style.left = x + "px"; el.style.top = y + "px"; });
@@ -298,15 +385,21 @@ function openStation(code) {
       <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.fines)}</b><small>взыскания · управляющему ${rub(s.managerFine)}</small></div>
     </section>
     <div class="cols">
-      <div><h3>Операторы</h3>${s.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Смен</th><th>Стандарт</th><th>Грубых</th><th>Мера</th><th>Взыскание</th></tr></thead><tbody>${s.operators.map(o => `<tr><td>${esc(o.name)}</td><td class="n">${o.shifts}</td><td class="n ${lvl(o.pct)}">${pct(o.pct)}</td><td class="n">${o.gross}</td><td class="lv-${o.level === "ok" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${esc(o.measure)}</td><td class="n">${rub(o.fine)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
+      <div style="grid-column:1/-1"><h3>Операторы</h3>${s.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Смен</th><th>Стандарт</th><th>Грубых</th><th>Мера</th><th>Повторная проверка</th><th>Взыскание</th></tr></thead><tbody>${s.operators.map(o => `<tr><td>${o.level === "top" ? "⭐ " : ""}${esc(o.name)}</td><td class="n">${o.shifts}</td><td class="n ${lvl(o.pct)}">${pct(o.pct)}</td><td class="n">${o.gross}</td><td class="lv-${o.level === "ok" || o.level === "top" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${esc(o.measure)}</td><td>${o.recheck ? (o.recheck.done ? `<span class="lv-ok">проведена</span>` : `<span class="${o.recheck.overdue ? "lv-bad" : "lv-warn"}">до ${dd(o.recheck.due)}${o.recheck.overdue ? " · просрочена" : ""}</span>`) : `<span class="muted">—</span>`}</td><td class="n">${rub(o.fine)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
+      <div style="grid-column:1/-1"><h3>Резервный фонд станции · ${mName(D.month)}</h3>${s.fund ? `<div class="sig" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+        <div><b style="font-size:1.05rem">${rub(s.fund.open)}</b><small>остаток с прошлого месяца</small></div>
+        <div><b style="font-size:1.05rem">+ ${rub(s.fund.inOps + s.fund.inMgr)}</b><small>взыскания: операторы ${rub(s.fund.inOps)}, управляющий ${rub(s.fund.inMgr)}</small></div>
+        <div><b style="font-size:1.05rem">${s.fund.paid ? "− " + rub(s.fund.paid) : "—"}</b><small>${s.fund.quarterMonth === 3 ? (s.fund.paid ? `поощрения: ${s.fund.winners.length} × ${rub(s.fund.each)}` : "поощрять некого") : `поощрения — в 3-м месяце квартала (сейчас ${s.fund.quarterMonth}-й)`}</small></div>
+        <div class="ok"><b style="font-size:1.05rem">${rub(s.fund.balance)}</b><small>остаток на следующий месяц</small></div></div>
+        ${s.fund.candidates.length ? `<div class="tbl" style="margin-top:8px"><table><thead><tr><th>Итоги квартала</th><th>Средний % за квартал</th><th>Грубых в месяц, макс.</th><th>Поощрение</th></tr></thead><tbody>${s.fund.candidates.map(c => `<tr><td>${c.ok ? "⭐ " : ""}${esc(c.name)}</td><td class="n ${lvl(c.qAvg)}">${pct(c.qAvg)}</td><td class="n">${c.gMax}</td><td>${s.fund.winners.includes(c.name) ? `<b class="lv-ok">${rub(s.fund.each)}</b>` : c.ok ? `<span class="lv-ok">претендует</span>` : `<span class="muted">${c.qAvg == null ? "нет проверок" : c.qAvg < s.cfg.bonusPct ? "ниже " + s.cfg.bonusPct + " %" : "много грубых"}</span>`}</td></tr>`).join("")}</tbody></table></div>` : ""}` : `<div class="empty">Фонд считается по загруженным бланкам — проверок станции пока нет.</div>`}</div>
       <div><h3>Где проседает — пункты стандарта</h3>${s.items.some(i => i.pct != null) ? s.items.map(i => `<div class="it"><span>${esc(i.name)}</span><div class="bar" style="--c:${i.pct == null ? "var(--none)" : i.pct >= 85 ? "var(--ok)" : i.pct >= 70 ? "var(--warn)" : "var(--bad)"}"><i style="width:${i.pct || 0}%"></i></div><span class="num">${pct(i.pct)}</span></div>`).join("") : `<div class="empty">Нет данных.</div>`}</div>
       <div><h3>Тайный покупатель</h3>${s.shop.length ? s.shop.slice(0, 3).map(v => `<div class="list"><div><b>${dd(v.date)} — ${pct(v.pct)}</b><br>${v.sections.filter(x => x.pct != null).map(x => `${esc(x.section)}: ${x.pct}%`).join(" · ")}${v.note ? `<br><span class="muted">${esc(v.note)}</span>` : ""}</div></div>`).join("") : `<div class="empty">Проверок тайного покупателя за месяц нет.</div>`}</div>
       <div><h3>Находки ОСК и ОСБ</h3>${s.finds.length ? `<div class="list">${s.finds.slice(0, 8).map(f => `<div><b class="${!f.fixed && f.due && f.due < new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10) ? "lv-bad" : f.fixed ? "lv-ok" : "lv-warn"}">${f.fixed ? "исправлено" : f.due ? "до " + dd(f.due) : "открыто"}</b> · ${dd(f.date)} · ${esc(f.who)}<br>${esc(f.what)}${f.to ? ` <span class="muted">→ ${esc(f.to)}</span>` : ""}</div>`).join("")}</div>` : `<div class="empty">Находок нет.</div>`}</div>
     </div>
-    <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px">${feedHtml(rs.slice(0, 60), false)}</div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
+    <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:380px;overflow:auto"><table class="rtab"><thead><tr><th>Когда</th><th>Оценка</th><th>Отзыв</th><th>Источник · автор</th></tr></thead><tbody>${rs.slice(0, 60).map(r => revRow(r, false)).join("")}</tbody></table></div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
   </div>`;
   $("#close").onclick = () => $("#dlg").close();
-  document.querySelectorAll("#dlg .rv-text").forEach(p => p.onclick = () => p.classList.toggle("open"));
+  document.querySelectorAll("#dlg .c-text p").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#dlg").showModal();
 }
 /* 📤 бланк ОСК станции: файл Excel или ссылка на Google-таблицу → разбор здесь → показываем, что нашли → «Добавить на экран» */
@@ -315,31 +408,33 @@ function openUpload() {
   const idx = [...(D.uploadIndex || [])].sort((a, b) => b.at - a.at);
   $("#dlg").innerHTML = `<div class="dlg">
     <div class="dlg-h"><h2 id="dlgTitle">Бланк ОСК станции</h2><span class="muted">файл бланка (Excel) или ссылка на Google-таблицу станции</span><button class="btn x" type="button" id="close">Закрыть</button></div>
-    <div class="cols"><label class="field" for="upFile">Файлы бланков (можно несколько)<input id="upFile" type="file" accept=".xlsx" multiple></label>
+    <div class="cols"><label class="field" for="upFile">Файлы бланков (можно несколько)<input id="upFile" type="file" accept=".xlsx,.xlsm" multiple></label>
       <label class="field" for="upLink">или ссылка на Google-таблицу<span style="display:flex;gap:6px"><input id="upLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:0"><button class="btn" id="upGo" type="button">Открыть</button></span></label></div>
     <div id="upPrev" class="up-list"></div>
     <div><button class="btn pri" id="upSave" type="button" hidden>Добавить на экран</button></div>
+    <div><h3>Таблицы станций на автообновлении · раз в час</h3>${(RAW.links || []).length ? `<div class="up-list">${RAW.links.map(L => `<div><span><b>${esc(L.station)}</b> <span class="muted">· ${esc(L.link.replace(/^https:\/\/docs\.google\.com\/spreadsheets\/d\//, "").slice(0, 18))}…</span></span><button class="btn" type="button" data-relink="${esc(L.link)}">Обновить сейчас</button><button class="btn" type="button" data-unlink="${esc(L.link)}">Снять</button></div>`).join("")}</div><div class="muted">${esc(SYNC.note || "Экран сам перечитывает эти таблицы раз в час, пока он открыт хотя бы у одного человека.")}</div>` : `<div class="empty">Пока нет. Вставьте ссылку на Google-таблицу станции выше — после «Добавить на экран» она будет обновляться сама.</div>`}</div>
     <div><h3>Уже загружено</h3>${idx.length ? `<div class="up-list">${idx.map(x => `<div><span><b>${esc(x.station)}</b> · ${mName(x.month)} · ${esc(x.checker || "")} <span class="muted">· клиентов ${x.obs}, грубых ${x.gross}${x.shop ? ", тайный покупатель" : ""} · ${esc(x.file || "")} · ${new Date(x.at).toLocaleDateString("ru-RU")} ${x.by === "osk" ? "(ОСК)" : "(руководство)"}</span></span>${x.link ? `<button class="btn" type="button" data-relink="${esc(x.link)}">Обновить из таблицы</button>` : ""}<button class="btn" type="button" data-del="${esc(x.key)}">Убрать</button></div>`).join("")}</div>` : `<div class="empty">Пока ничего не загружено.</div>`}</div>
   </div>`;
   PENDING = [];
   $("#close").onclick = () => $("#dlg").close();
   $("#upFile").onchange = async e => { for (const f of e.target.files) await addBlank(await f.arrayBuffer(), f.name, ""); };
-  $("#upGo").onclick = () => fromLink($("#upLink").value.trim());
+  $("#upGo").onclick = () => fromLink($("#upLink").value.trim(), true);
   $("#upSave").onclick = saveBlanks;
-  $("#dlg").querySelectorAll("[data-relink]").forEach(b => b.onclick = () => fromLink(b.dataset.relink));
+  $("#dlg").querySelectorAll("[data-relink]").forEach(b => b.onclick = () => fromLink(b.dataset.relink, true));
+  $("#dlg").querySelectorAll("[data-unlink]").forEach(b => b.onclick = async () => { if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Точно снять?"; return; } b.disabled = true; await fetch("/api/link?link=" + encodeURIComponent(b.dataset.unlink), { method: "DELETE" }); await load(); openUpload(); });
   $("#dlg").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Точно убрать?"; return; } b.disabled = true; await fetch("/api/upload?key=" + encodeURIComponent(b.dataset.del), { method: "DELETE" }); await load(); openUpload(); });
   if (!$("#dlg").open) $("#dlg").showModal();
 }
-async function fromLink(link) {
+async function fromLink(link, fresh = false) {
   if (!link) return; const box = $("#upPrev"); box.insertAdjacentHTML("beforeend", `<div class="prev" id="lnk">Открываю таблицу…</div>`);
-  try { const r = await fetch("/api/gsheet?link=" + encodeURIComponent(link)); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "таблица не открылась"); $("#lnk")?.remove(); await addBlank(await r.arrayBuffer(), "Google-таблица", link); }
+  try { const r = await fetch("/api/gsheet?link=" + encodeURIComponent(link) + (fresh ? "&fresh=1" : "")); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "таблица не открылась"); $("#lnk")?.remove(); await addBlank(await r.arrayBuffer(), "Google-таблица", link); }
   catch (e) { const el = $("#lnk"); if (el) { el.id = ""; el.className = "prev err"; el.innerHTML = `<span class="err-t">Ссылка: ${esc(e.message)}</span>`; } }
 }
 async function addBlank(buf, file, link) {
-  let B; try { B = parseBlank(await readXlsx(buf)); } catch (e) { $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev err"><b>${esc(file)}</b><span class="err-t">Не прочитался: ${esc(e.message)}. Нужен файл .xlsx (в Excel: «Сохранить как» → «Книга Excel»).</span></div>`); return; }
+  let B; try { B = parseBlank(await readXlsx(buf)); } catch (e) { $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev err"><b>${esc(file)}</b><span class="err-t">Не прочитался: ${esc(e.message)}. Нужен файл Excel (.xlsx или .xlsm).</span></div>`); return; }
   const bad = !B.station || !B.month || !B.obs.length, R = !bad && build(mergeUploads(RAW.sheet || {}, [B]), [], { month: B.month, today: RAW.today }).stations.find(s => s.code === B.station);
   const replace = (D.uploadIndex || []).some(x => x.station === B.station && x.month === B.month);
-  if (!bad) PENDING.push({ ...B, file, link });
+  if (!bad) PENDING.push({ ...B, file, link, hash: hashOf(B) });
   $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev ${bad ? "err" : ""}"><b>${esc(file)}</b>
     ${bad ? `<span class="err-t">Не получится добавить: ${esc(B.warnings[0] || "нет данных")}</span>` : `<span><b>${esc(B.station)}</b> · ${mName(B.month)} · проверяющий ${esc(B.checker || "—")} · операторов ${B.operators.length} · клиентов ${B.obs.length} · грубых ${B.gross.length}${B.shop.length ? " · тайный покупатель" : ""}</span>
       <span>Станция: <b class="${lvl(R.pct)}">${pct(R.pct)}</b> · ${R.operators.map(o => `${esc(o.name)} ${pct(o.pct)}`).join(", ")} · взыскания ${rub(R.fines)}</span>${replace ? `<span class="warn-t">Эта станция за этот месяц уже загружена — заменится новой.</span>` : ""}`}

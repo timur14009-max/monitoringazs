@@ -94,7 +94,7 @@ export default {
       try { rv = await loadReviews(env); if (rv.err) errors.push(rv.err); } catch (e) { errors.push(String(e.message)); }
       try { uploads = env.AZS ? await loadUploads(env) : []; } catch (e) { errors.push("бланки: " + String(e.message).slice(0, 80)); }
       const { _err, ...sh } = sheet;
-      return json({ sheet: sh, reviews: rv.list, uploads, uploadIndex: env.AZS ? await idx(env) : [], errors, role, today: todayMsk(), at: Date.now() });
+      return json({ sheet: sh, reviews: rv.list, uploads, uploadIndex: env.AZS ? await idx(env) : [], links: env.AZS ? (await env.AZS.get("links", "json")) || [] : [], errors, role, today: todayMsk(), at: Date.now() });
     }
     /* бланк станции: разобран в браузере, здесь — проверка и запись; та же станция и месяц — заменяется */
     if (p === "/api/upload" && req.method === "POST") {
@@ -102,10 +102,15 @@ export default {
       const station = S(b.station).slice(0, 10), month = S(b.month).slice(0, 7);
       if (!/^А-\d{1,3}$/.test(station) || !/^\d{4}-\d{2}$/.test(month)) return json({ error: "в бланке нет кода станции или месяца" }, 400);
       const doc = { station, month, checker: S(b.checker).slice(0, 80), manager: S(b.manager).slice(0, 120), file: S(b.file).slice(0, 160), link: /^https:\/\/docs\.google\.com\//.test(b.link || "") ? S(b.link) : "", by: role, at: Date.now(),
-        obs: cleanRows(b.obs, 3000), gross: cleanRows(b.gross, 500), shop: cleanRows(b.shop, 20) };
+        obs: cleanRows(b.obs, 3000), gross: cleanRows(b.gross, 500), shop: cleanRows(b.shop, 20), hash: S(b.hash).slice(0, 40), auto: !!b.auto,
+        settings: b.settings && typeof b.settings === "object" ? Object.fromEntries(["norm", "feedback", "training", "gross", "sumFeedback", "sumTraining", "sumMax", "managerShare", "bonusPct", "bonusShare", "bonusMaxGross", "bonusCap"].map(k => [k, Number.isFinite(+b.settings[k]) && b.settings[k] !== null ? +b.settings[k] : null])) : null,
+        fundOpen: Number.isFinite(+b.fundOpen) && b.fundOpen !== null ? Math.round(+b.fundOpen) : null };
       const key = `up:${station}:${month}`, list = (await idx(env)).filter(x => x.key !== key);
-      list.push({ key, station, month, file: doc.file, link: doc.link, by: role, at: doc.at, checker: doc.checker, obs: doc.obs.length, gross: doc.gross.length, shop: doc.shop.length });
-      await env.AZS.put(key, JSON.stringify(doc)); await env.AZS.put("up:index", JSON.stringify(list)); await drop("uploads");
+      list.push({ key, station, month, file: doc.file, link: doc.link, by: role, at: doc.at, checker: doc.checker, obs: doc.obs.length, gross: doc.gross.length, shop: doc.shop.length, hash: doc.hash, auto: doc.auto });
+      await env.AZS.put(key, JSON.stringify(doc)); await env.AZS.put("up:index", JSON.stringify(list));
+      /* ссылка на Google-таблицу станции — в список автообновления (одна ссылка — одна строка; станция берётся из последнего чтения) */
+      if (doc.link) { const L = ((await env.AZS.get("links", "json")) || []).filter(x => x.link !== doc.link); L.push({ link: doc.link, station, at: doc.at }); await env.AZS.put("links", JSON.stringify(L)); }
+      await drop("uploads");
       return json({ ok: true, key });
     }
     if (p === "/api/upload" && req.method === "DELETE") {
@@ -113,13 +118,20 @@ export default {
       await env.AZS.delete(key); await env.AZS.put("up:index", JSON.stringify((await idx(env)).filter(x => x.key !== key))); await drop("uploads");
       return json({ ok: true });
     }
-    /* Google-таблица станции по ссылке → файл Excel (браузер сам не может скачать её из-за правил Google) */
+    /* Google-таблица станции по ссылке → файл Excel (браузер сам не может скачать её из-за правил Google).
+       Для автообновления — запас на 50 минут: сколько бы экранов ни было открыто, Google спрашиваем раз в час; fresh=1 — сразу */
     if (p === "/api/gsheet") {
       const id = /\/spreadsheets\/d\/([\w-]{20,})/.exec(String(url.searchParams.get("link") || ""))?.[1]; if (!id) return json({ error: "это не ссылка на Google Таблицу" }, 400);
+      const ck = new Request("https://cache.azs-monitor/gsheet/" + id), fresh = url.searchParams.get("fresh") === "1";
+      if (!fresh) { const hit = await caches.default.match(ck); if (hit) return new Response(hit.body, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store", "x-from": "cache" } }); }
       const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`, { redirect: "follow" }), ct = r.headers.get("content-type") || "";
       if (!r.ok || /html/i.test(ct)) return json({ error: "таблица не открылась: в Google — «Настройки доступа» → «Все, у кого есть ссылка» → «Читатель»" }, 400);
-      if (+(r.headers.get("content-length") || 0) > 15e6) return json({ error: "файл больше 15 МБ" }, 413);
-      return new Response(r.body, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
+      const buf = await r.arrayBuffer(); if (buf.byteLength > 15e6) return json({ error: "файл больше 15 МБ" }, 413);
+      ctx.waitUntil(caches.default.put(ck, new Response(buf, { headers: { "cache-control": "max-age=3000" } })));
+      return new Response(buf, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
+    }
+    if (p === "/api/link" && req.method === "DELETE") {
+      const link = String(url.searchParams.get("link") || ""); await env.AZS.put("links", JSON.stringify(((await env.AZS.get("links", "json")) || []).filter(x => x.link !== link))); return json({ ok: true });
     }
     if (p === "/" || p === "/index.html") return new Response(PAGE.replace("__AUTH__", role || "").replace("__ERR__", url.searchParams.get("e") ? "1" : "0"), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer", "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'" } });
     return new Response("Не найдено", { status: 404 });

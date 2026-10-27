@@ -57,7 +57,8 @@ export function parseBlank(book) {
   const obs = [], gross = [];
   for (const sn of names) {
     const m = /^оператор\s*(\d+)$/i.exec(sn.trim()); if (!m) continue; const g = book[sn], rows = rowsOf(g), opName = opNames[+m[1]] || "";
-    if (!opName) { if (rows.some(r => /^\d+$/.test(at(g, r, "A")) && ["B", "C", "D"].some(c => at(g, r, c)))) W.push(`лист «${sn}»: есть отметки, но нет фамилии оператора на листе «Операторы»`); continue; }
+    /* «есть отметки» — только 1 / 0 / н/п в колонках пунктов (номера и названия грубых нарушений — не отметки) */
+    if (!opName) { if (rows.some(r => /^\d+$/.test(at(g, r, "A")) && ["B", "C", "D", "E", "F", "G", "H"].some(c => /^(0|1|н\/?п|0[.,]5)$/i.test(at(g, r, c))) && !/[а-я]{4}/i.test(at(g, r, "B")))) W.push(`лист «${sn}»: есть отметки, но нет фамилии оператора на листе «Операторы»`); continue; }
     for (const r0 of rows) {
       const sm = /^смена\s*(\d)/i.exec(at(g, r0, "A")); if (!sm) continue;
       const dl = COLS.find(c => /^дата записи/i.test(at(g, r0, c))), date = xdate(dl ? rightOf(g, r0, dl) : ""), hr = rows.find(r => r > r0 && /^№/.test(at(g, r, "A"))); if (!hr) continue;
@@ -84,9 +85,20 @@ export function parseBlank(book) {
     if (oc) { const row = { "Дата": date, "Станция": station, "Проверил": (() => { const f = findLabel(g, /^проверил/i); return f ? rightOf(g, f.r, f.c) : ""; })(), "Заметки": "" }; let n = 0;
       for (const r of rows.filter(r => r > hd)) { const k = at(g, r, "A"); if (!/^\d+$/.test(k)) continue; const v = mk(at(g, r, oc)); if (v) { row["П" + k] = v; n++; } }
       if (n) { if (!date) W.push("тайный покупатель: нет даты"); shop.push(row); } } }
+  /* шкала взысканий из листа «Настройки» самого бланка (в версии от 27.10: грубое — 100 ₽, штрафа управляющего нет) */
+  const st = book[names.find(n => /^настройк/i.test(n))] || {}, val = re => { const f = findLabel(st, re); const v = f ? parseFloat(String(rightOf(st, f.r, f.c)).replace(/\s/g, "").replace(",", ".")) : NaN; return Number.isFinite(v) ? v : null; };
+  const sumRow = re => { const f = findLabel(st, re); if (!f) return null; const v = parseFloat(String(at(st, f.r, "B")).replace(/\s/g, "")); return Number.isFinite(v) ? v : null; };
+  const settings = Object.keys(st).length ? { norm: val(/граница «нормы»|верхняя граница/i), feedback: val(/граница «обратной связи»/i), training: val(/граница «обучения»/i), gross: val(/стоимость грубого нарушения/i),
+    sumFeedback: sumRow(/^от\s*70/i), sumTraining: sumRow(/^от\s*50/i), sumMax: sumRow(/^ниже\s*50/i), managerShare: (v => v == null ? 0 : v / 100)(val(/доля штрафа управляющего/i)),
+    /* поощрения по итогам квартала и резервный фонд (бланк от 27.10) */
+    bonusPct: val(/порог поощрения/i), bonusShare: (v => v == null ? null : v / 100)(val(/доля фонда.*поощрени/i)), bonusMaxGross: val(/грубых нарушений за месяц.*не больше/i), bonusCap: val(/максимум поощрения/i) } : null;
+  /* остаток резервного фонда с прошлого месяца (вписывают руками) — начальный остаток, если экран раньше этот фонд не вёл */
+  const rf = book[names.find(n => /резервный фонд/i.test(n))] || {}, rfl = findLabel(rf, /^остаток с прошлого месяца/i), fundOpen = rfl ? parseFloat(String(rightOf(rf, rfl.r, rfl.c)).replace(/\s/g, "").replace(",", ".")) || 0 : null;
+  /* управляющий: «Операторы», иначе «Свод по станции» или чек-лист тайного покупателя */
+  const mgr = manager || (() => { for (const n of names.filter(n => /свод|тайного/i.test(n))) { const f = findLabel(book[n], /^управляющ/i); const v = f ? rightOf(book[n], f.r, f.c) : ""; if (v && v !== "—") return v; } return ""; })();
   const months = {}; for (const o of obs) { const d = o["Дата записи"]; if (d) { const k = d.slice(6, 10) + "-" + d.slice(3, 5); months[k] = (months[k] || 0) + 1; } }
   const month = Object.entries(months).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
   if (!obs.length) W.push("в бланке нет отметок по клиентам");
   if (Object.keys(months).length > 1) W.push(`в бланке смены за разные месяцы (${Object.keys(months).join(", ")}) — бланк будет записан на ${month}`);
-  return { station, month, checker, manager, operators: Object.values(opNames), obs, gross, shop, warnings: W };
+  return { station, month, checker, manager: mgr, operators: Object.values(opNames), obs, gross, shop, settings, fundOpen, warnings: W };
 }

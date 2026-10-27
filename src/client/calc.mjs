@@ -32,13 +32,17 @@ const num = (v, d) => { const n = Number(String(v ?? "").replace(/\s/g, "").repl
 /* «Настройки» → параметры шкалы (по порядку строк листа; пусто — значения бланка) */
 export function settings(rows) {
   const v = (rows || []).map(r => num(r["Значение"], NaN)), g = (i, d) => Number.isFinite(v[i]) ? v[i] : d;
-  return { norm: g(0, 85), feedback: g(1, 70), training: g(2, 50), sumFeedback: g(3, 1500), sumTraining: g(4, 4500), sumMax: g(5, 9000), gross: g(6, 200), managerShare: g(7, 50) / 100 };
+  return { norm: g(0, 85), feedback: g(1, 70), training: g(2, 50), sumFeedback: g(3, 1500), sumTraining: g(4, 4500), sumMax: g(5, 9000), gross: g(6, 200), managerShare: g(7, 50) / 100,
+    /* поощрения по итогам квартала (бланк ОСК от 27.10): порог 90 %, 50 % фонда, не больше 3 грубых в каждом месяце, без потолка */
+    bonusPct: 90, bonusShare: 0.5, bonusMaxGross: 3, bonusCap: 0 };
 }
+/* мера по шкале бланка; повторная проверка — через 2 недели после последней смены (70–84 % — так в бланке; 50–69 % — «повторная проверка», срок тот же) */
 export function measure(pct, S) {
   if (pct == null) return { name: "нет проверок", sum: 0, level: "none" };
+  if (pct >= (S.bonusPct ?? 90)) return { name: "Кандидат на поощрение", sum: 0, level: "top" };
   if (pct >= S.norm) return { name: "Норма", sum: 0, level: "ok" };
-  if (pct >= S.feedback) return { name: "Обратная связь", sum: S.sumFeedback, level: "warn" };
-  if (pct >= S.training) return { name: "Обучение", sum: S.sumTraining, level: "bad" };
+  if (pct >= S.feedback) return { name: "Обратная связь", sum: S.sumFeedback, level: "warn", recheck: true };
+  if (pct >= S.training) return { name: "Обучение, предупреждение", sum: S.sumTraining, level: "bad", recheck: true };
   return { name: "Максимальное взыскание", sum: S.sumMax, level: "bad" };
 }
 const pctOf = (done, appl) => appl ? done / appl * 100 : null;
@@ -56,6 +60,10 @@ export function mergeUploads(sheet, uploads) {
   const known = new Set((sheet["Станции"] || []).map(s => s["Станция"]));
   const extra = [...new Set((uploads || []).map(u => u.station))].filter(c => c && !known.has(c)).map(c => ({ "Станция": c, "Тип": "АЗС", "Работает": "да" }));
   S["Станции"] = [...(sheet["Станции"] || []), ...extra].map(s => { const u = (uploads || []).filter(x => x.station === s["Станция"]).sort((a, b) => b.month.localeCompare(a.month))[0]; return u && u.manager && !s["Управляющий"] ? { ...s, "Управляющий": u.manager } : s; });
+  /* шкала взысканий станции за месяц — из её бланка (пустые значения — из листа «Настройки») */
+  S._cfg = Object.fromEntries((uploads || []).filter(u => u.settings).map(u => [u.station + "|" + u.month, u.settings]));
+  /* остаток резервного фонда, вписанный в бланк руками, — начальный остаток станции на тот месяц */
+  S._fundOpen = Object.fromEntries((uploads || []).filter(u => u.fundOpen != null && Number.isFinite(+u.fundOpen)).map(u => [u.station + "|" + u.month, +u.fundOpen]));
   return S;
 }
 /* код станции: «A2», «а-2 », «А 2» → «А-2» */
@@ -71,20 +79,53 @@ export function build(sheet, reviews, { month, today }) {
   stations.sort((a, b) => (parseInt(a.code.replace(/\D/g, "")) || 999) - (parseInt(b.code.replace(/\D/g, "")) || 999));
   const byCode = new Map(stations.map(s => [s.code, s]));
   const st = code => byCode.get(code) || null;
-  /* наблюдения: оператор → смена → суммы по пунктам */
-  const ops = new Map(), items = new Map();
-  for (const r of sheet["Наблюдения"] || []) {
-    const d = isoDate(r["Дата записи"]), code = r["Станция"]; if (!inM(d) || !st(code)) continue;
-    const key = code + "|" + (r["Оператор"] || "?"), sh = String(r["Смена"] || "1").trim();
-    if (!ops.has(key)) ops.set(key, { station: code, name: r["Оператор"] || "?", shifts: new Map(), gross: 0, dates: new Set() });
-    const o = ops.get(key); if (!o.shifts.has(sh)) o.shifts.set(sh, { done: ITEMS.map(() => 0), appl: ITEMS.map(() => 0), date: d }); const x = o.shifts.get(sh); o.dates.add(d);
-    ITEMS.forEach((it, i) => { const m = mark(r[it]); if (m == null) return; x.done[i] += m; x.appl[i] += 1; const k = code + "|" + i; const t = items.get(k) || { done: 0, appl: 0 }; t.done += m; t.appl += 1; items.set(k, t); });
-  }
-  const gross = [];
-  for (const r of sheet["Грубые нарушения"] || []) { const d = isoDate(r["Дата"]), code = r["Станция"]; if (!inM(d) || !st(code)) continue; gross.push({ date: d, station: code, operator: r["Оператор"] || "", what: r["Нарушение"] || "", time: r["Тайм-код"] || "" }); const o = ops.get(code + "|" + (r["Оператор"] || "?")); if (o) o.gross++; else ops.set(code + "|" + (r["Оператор"] || "?"), { station: code, name: r["Оператор"] || "?", shifts: new Map(), gross: 1, dates: new Set() }); }
+  /* шкала станции за месяц: из её бланка, пустое — из листа «Настройки» */
+  const cfgAt = (code, mm) => { const c = (sheet._cfg || {})[code + "|" + mm]; if (!c) return S; const o = { ...S }; for (const [k, v] of Object.entries(c)) if (v != null && Number.isFinite(+v)) o[k] = +v; return o; };
+  const cfgOf = code => cfgAt(code, month);
+  /* все даты смен оператора (за все месяцы) — для повторной проверки */
+  const shiftDates = new Map(); for (const r of sheet["Наблюдения"] || []) { const d = isoDate(r["Дата записи"]), k = r["Станция"] + "|" + (r["Оператор"] || "?"); if (!d) continue; const s = shiftDates.get(k) || new Set(); s.add(d); shiftDates.set(k, s); }
+  const plus = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  /* операторы за месяц mm: смены → % (среднее пунктов), среднее смен, грубые, мера, взыскание */
   const shiftPct = x => avg(x.done.map((d, i) => pctOf(d, x.appl[i])).filter(v => v != null));
-  const operators = [...ops.values()].map(o => { const sh = [...o.shifts.values()].map(shiftPct).filter(x => x != null), p = avg(sh), m = measure(p == null ? null : Math.round(p), S);
-    return { station: o.station, name: o.name, shifts: sh.length, pct: p == null ? null : Math.round(p), gross: o.gross, measure: m.name, level: m.level, fine: m.sum + o.gross * S.gross }; }).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+  function monthOps(mm) {
+    const ops = new Map(), items = new Map(), gross = [], inMM = d => d && d.slice(0, 7) === mm;
+    for (const r of sheet["Наблюдения"] || []) {
+      const d = isoDate(r["Дата записи"]), code = r["Станция"]; if (!inMM(d) || !st(code)) continue;
+      const key = code + "|" + (r["Оператор"] || "?"), sh = String(r["Смена"] || "1").trim();
+      if (!ops.has(key)) ops.set(key, { station: code, name: r["Оператор"] || "?", shifts: new Map(), gross: 0, last: "" });
+      const o = ops.get(key); if (!o.shifts.has(sh)) o.shifts.set(sh, { done: ITEMS.map(() => 0), appl: ITEMS.map(() => 0), date: d }); const x = o.shifts.get(sh); if (d > o.last) o.last = d;
+      ITEMS.forEach((it, i) => { const m = mark(r[it]); if (m == null) return; x.done[i] += m; x.appl[i] += 1; const k = code + "|" + i; const t = items.get(k) || { done: 0, appl: 0 }; t.done += m; t.appl += 1; items.set(k, t); });
+    }
+    for (const r of sheet["Грубые нарушения"] || []) { const d = isoDate(r["Дата"]), code = r["Станция"]; if (!inMM(d) || !st(code)) continue; gross.push({ date: d, station: code, operator: r["Оператор"] || "", what: r["Нарушение"] || "", time: r["Тайм-код"] || "" }); const k = code + "|" + (r["Оператор"] || "?"); const o = ops.get(k); if (o) o.gross++; else ops.set(k, { station: code, name: r["Оператор"] || "?", shifts: new Map(), gross: 1, last: "" }); }
+    const operators = [...ops.values()].map(o => { const C = cfgAt(o.station, mm), sh = [...o.shifts.values()].map(shiftPct).filter(x => x != null), p = avg(sh), pr = p == null ? null : Math.round(p), m = measure(pr, C);
+      /* повторная проверка: через 2 недели после последней смены месяца; сделана — если позже есть смена этого оператора */
+      const due = m.recheck && o.last ? plus(o.last, 14) : "", done = due && [...(shiftDates.get(o.station + "|" + o.name) || [])].some(d => d > o.last);
+      return { station: o.station, name: o.name, shifts: sh.length, pct: pr, gross: o.gross, measure: m.name, level: m.level, fine: m.sum + o.gross * C.gross, recheck: due ? { due, done: !!done, overdue: !done && due < today } : null }; }).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+    return { operators, items, gross };
+  }
+  const { operators, items, gross } = monthOps(month);
+  /* 💰 резервный фонд станции: все взыскания (операторы + управляющий) копятся; в 3-м месяце квартала — поощрения:
+     средний % за квартал не ниже порога и в каждом месяце не больше N грубых; доля фонда делится поровну, вниз до 10 ₽ (потолок — если задан) */
+  const dataMonths = [...new Set((sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)).filter(Boolean))].sort();
+  const monthCache = new Map(), opsAt = mm => { if (!monthCache.has(mm)) monthCache.set(mm, mm === month ? { operators } : monthOps(mm)); return monthCache.get(mm); };
+  const nextM = mm => { const d = new Date(Date.parse(mm + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); };
+  function fundOf(code) {
+    const mine = dataMonths.filter(mm => opsAt(mm).operators.some(o => o.station === code)); if (!mine.length || mine[0] > month) return null;
+    let bal = (sheet._fundOpen || {})[code + "|" + mine[0]] || 0, last = null;
+    for (let mm = mine[0]; mm <= month; mm = nextM(mm)) {
+      const C = cfgAt(code, mm), ops = opsAt(mm).operators.filter(o => o.station === code), finesOps = ops.reduce((a, o) => a + o.fine, 0), mgr = Math.round(finesOps * C.managerShare);
+      const open = bal; bal += finesOps + mgr; const qm = (+mm.slice(5) - 1) % 3 + 1;
+      /* кандидаты квартала: месяцы квартала до этого включительно */
+      const qMonths = [0, 1, 2].slice(0, qm).map(i => { const d = new Date(Date.parse(mm + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() - (qm - 1) + i); return d.toISOString().slice(0, 7); });
+      const names = [...new Set(qMonths.flatMap(q => opsAt(q).operators.filter(o => o.station === code).map(o => o.name)))];
+      const cand = names.map(n => { const per = qMonths.map(q => opsAt(q).operators.find(o => o.station === code && o.name === n)).filter(Boolean), ps = per.map(o => o.pct).filter(x => x != null), qAvg = ps.length ? Math.round(avg(ps)) : null, gMax = Math.max(0, ...per.map(o => o.gross));
+        return { name: n, qAvg, gMax, months: per.length, ok: qAvg != null && qAvg >= C.bonusPct && gMax <= C.bonusMaxGross }; }).sort((a, b) => (b.qAvg ?? -1) - (a.qAvg ?? -1));
+      let paid = 0, each = 0; const win = cand.filter(c => c.ok);
+      if (qm === 3 && win.length) { const pool = bal * C.bonusShare; each = Math.floor(pool / win.length / 10) * 10; if (C.bonusCap > 0) each = Math.min(each, C.bonusCap); paid = each * win.length; bal -= paid; }
+      last = { month: mm, open: Math.round(open), inOps: finesOps, inMgr: mgr, paid, each, balance: Math.round(bal), quarterMonth: qm, candidates: cand, winners: qm === 3 ? win.map(c => c.name) : [] };
+    }
+    return last;
+  }
   /* тайный покупатель: % визита = сумма / число применимых пунктов */
   const crit = (sheet["Пункты ТП"] || []).map(c => ({ id: c["Пункт"], section: c["Раздел"] }));
   const shop = (sheet["Тайный покупатель"] || []).map(r => { const d = isoDate(r["Дата"]); const vals = crit.map(c => ({ ...c, v: mark(r[c.id]) })).filter(x => x.v != null);
@@ -112,7 +153,7 @@ export function build(sheet, reviews, { month, today }) {
     /* светофор: худшее из стандарта, отзывов и просроченных находок */
     const lv = [pct == null ? 0 : pct >= S.norm ? 1 : pct >= S.feedback ? 2 : 3, rating == null ? 0 : rating >= 4.5 ? 1 : rating >= 4 ? 2 : 3, overdue.length ? 3 : open.length ? 2 : 0, g ? 2 : 0];
     const light = ["none", "green", "yellow", "red"][Math.max(...lv)];
-    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * S.managerShare), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
+    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * cfgOf(s.code).managerShare), cfg: cfgOf(s.code), fund: fundOf(s.code), top: op.filter(o => o.level === "top").length, rechecks: op.filter(o => o.recheck).map(o => ({ name: o.name, ...o.recheck })), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
   };
   const cards = stations.map(card);
   /* специалисты ОСК: за кем какие станции, сколько смен проверено за месяц, средний результат их станций */
@@ -130,7 +171,8 @@ export function build(sheet, reviews, { month, today }) {
   const allP = cards.map(c => c.pct).filter(x => x != null), allR = rvM.map(r => r.rating);
   return {
     month, settings: S, stations: cards,
-    net: { pct: allP.length ? Math.round(avg(allP)) : null, checked: allP.length, rating: allR.length ? Math.round(avg(allR) * 10) / 10 : null, reviews: allR.length, bad: rvM.filter(r => r.rating <= 2).length, badToday: rv.filter(r => r.date === today && r.rating <= 2).length, gross: gross.length, fines: cards.reduce((a, c) => a + c.fines, 0), open: cards.reduce((a, c) => a + c.open, 0), overdue: cards.reduce((a, c) => a + c.overdue, 0) },
+    net: { pct: allP.length ? Math.round(avg(allP)) : null, checked: allP.length, rating: allR.length ? Math.round(avg(allR) * 10) / 10 : null, reviews: allR.length, bad: rvM.filter(r => r.rating <= 2).length, badToday: rv.filter(r => r.date === today && r.rating <= 2).length, gross: gross.length, fines: cards.reduce((a, c) => a + c.fines, 0), open: cards.reduce((a, c) => a + c.open, 0), overdue: cards.reduce((a, c) => a + c.overdue, 0),
+      fund: cards.reduce((a, c) => a + (c.fund?.balance || 0), 0), top: cards.reduce((a, c) => a + c.top, 0), rechecks: cards.reduce((a, c) => a + c.rechecks.filter(r => !r.done).length, 0), rechecksOverdue: cards.reduce((a, c) => a + c.rechecks.filter(r => r.overdue).length, 0) },
     reviews: rv.slice(0, 500), unmatched, specialists, charts: { byMonth, dist, bySource, byPlace, netItems },
     months: [...new Set([...(sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)), ...rv.map(r => (r.date || "").slice(0, 7))].filter(Boolean))].sort().reverse(),
   };

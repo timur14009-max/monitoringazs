@@ -25,6 +25,10 @@ try {
   await ev(`document.querySelector("#upSave").click()`); await sleep(5000);
   out.push("после «Добавить»: " + await ev(`document.querySelector("#upPrev")?.innerText?.replace(/\\s+/g," ").slice(0,120)`), "в списке загруженных: " + await ev(`document.querySelectorAll("[data-del]").length`));
   await shot("ui-saved");
+  /* карточка станции из бланка: операторы, повторные проверки, резервный фонд */
+  await ev(`document.querySelector("#dlg").close()`); await sleep(500); const code = await ev(`(()=>{const b=[...document.querySelectorAll(".st")].find(x=>x.querySelector(".mini b")); b?.click(); return b?.dataset.code})()`); await sleep(800);
+  out.push("станция " + code + ": " + await ev(`document.querySelector("#dlg")?.innerText?.replace(/\\s+/g," ").match(/Резервный фонд[^]{0,260}/)?.[0] || "нет фонда"`), "повторные: " + await ev(`[...document.querySelectorAll("#dlg td")].filter(t=>/^до \\d|проведена/.test(t.innerText)).length`));
+  await shot("ui-station"); await ev(`document.querySelector("#dlg").close()`); await sleep(300); await ev(`document.querySelector("#up").click()`); await sleep(500);
   /* убрать проверочную загрузку: двойное нажатие «Убрать» */
   await ev(`document.querySelector("[data-del]").click()`); await sleep(200); await ev(`document.querySelector("[data-del]").click()`); await sleep(4000);
   out.push("после удаления в списке: " + await ev(`document.querySelectorAll("[data-del]").length`));
