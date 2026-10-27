@@ -234,7 +234,10 @@ async function autoSync(force = false) {
   let changed = 0, failed = 0;
   for (const L of RAW.links) {
     try { const r = await fetch("/api/gsheet?link=" + encodeURIComponent(L.link) + (force ? "&fresh=1" : "")); if (!r.ok) { failed++; continue; }
-      const B = parseBlank(await readXlsx(await r.arrayBuffer())); if (!B.station || !B.month || !B.obs.length) continue;
+      const B = parseBlank(await readXlsx(await r.arrayBuffer()));
+      /* код станции не вписан в бланк — берём выбранный при подключении таблицы */
+      if (!B.station && L.station) { B.station = L.station; for (const x of [...B.obs, ...B.gross, ...B.shop]) x["Станция"] = L.station; }
+      if (!B.station || !B.month || !B.obs.length) continue;
       const h = hashOf(B), was = (RAW.uploadIndex || []).find(x => x.key === `up:${B.station}:${B.month}`); if (was && was.hash === h) continue;
       const s = await fetch("/api/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...B, file: "Google-таблица", link: L.link, hash: h, auto: true }) }); if (s.ok) changed++; else failed++;
     } catch { failed++; }
@@ -459,7 +462,7 @@ function openUpload() {
       <label class="field" for="upLink">или ссылка на Google-таблицу<span style="display:flex;gap:6px"><input id="upLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:0"><button class="btn" id="upGo" type="button">Открыть</button></span></label></div>
     <div id="upPrev" class="up-list"></div>
     <div><button class="btn pri" id="upSave" type="button" hidden>Добавить на экран</button></div>
-    <div><h3>Таблицы станций на автообновлении · раз в час</h3>${(RAW.links || []).length ? `<div class="up-list">${RAW.links.map(L => `<div><span><b>${esc(L.station)}</b> <span class="muted">· ${esc(L.link.replace(/^https:\/\/docs\.google\.com\/spreadsheets\/d\//, "").slice(0, 18))}…</span></span><button class="btn" type="button" data-relink="${esc(L.link)}">Обновить сейчас</button><button class="btn" type="button" data-unlink="${esc(L.link)}">Снять</button></div>`).join("")}</div><div class="muted">${esc(SYNC.note || "Экран сам перечитывает эти таблицы раз в час, пока он открыт хотя бы у одного человека.")}</div>` : `<div class="empty">Пока нет. Вставьте ссылку на Google-таблицу станции выше — после «Добавить на экран» она будет обновляться сама.</div>`}</div>
+    <div><h3>Таблицы станций на автообновлении · раз в час</h3>${(RAW.links || []).length ? `<div class="up-list">${RAW.links.map(L => `<div><span><b>${esc(L.station)}</b> <span class="muted">· ${esc(L.link.replace(/^https:\/\/docs\.google\.com\/spreadsheets\/d\//, "").slice(0, 18))}…${(D.uploadIndex || []).some(x => x.link === L.link) ? "" : " · ждёт заполнения"}</span></span><button class="btn" type="button" data-relink="${esc(L.link)}">Обновить сейчас</button><button class="btn" type="button" data-unlink="${esc(L.link)}">Снять</button></div>`).join("")}</div><div class="muted">${esc(SYNC.note || "Экран сам перечитывает эти таблицы раз в час, пока он открыт хотя бы у одного человека.")}</div>` : `<div class="empty">Пока нет. Вставьте ссылку на Google-таблицу станции выше — после «Добавить на экран» она будет обновляться сама.</div>`}</div>
     <div><h3>Уже загружено</h3>${idx.length ? `<div class="up-list">${idx.map(x => `<div><span><b>${esc(x.station)}</b> · ${mName(x.month)} · ${esc(x.checker || "")} <span class="muted">· клиентов ${x.obs}, грубых ${x.gross}${x.shop ? ", тайный покупатель" : ""} · ${esc(x.file || "")} · ${new Date(x.at).toLocaleDateString("ru-RU")} ${x.by === "osk" ? "(ОСК)" : "(руководство)"}</span></span>${x.link ? `<button class="btn" type="button" data-relink="${esc(x.link)}">Обновить из таблицы</button>` : ""}<button class="btn" type="button" data-del="${esc(x.key)}">Убрать</button></div>`).join("")}</div>` : `<div class="empty">Пока ничего не загружено.</div>`}</div>
   </div>`;
   PENDING = [];
@@ -483,9 +486,16 @@ async function addBlank(buf, file, link) {
   const replace = (D.uploadIndex || []).some(x => x.station === B.station && x.month === B.month);
   if (!bad) PENDING.push({ ...B, file, link, hash: hashOf(B) });
   $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev ${bad ? "err" : ""}"><b>${esc(file)}</b>
-    ${bad ? `<span class="err-t">Не получится добавить: ${esc(B.warnings[0] || "нет данных")}</span>` : `<span><b>${esc(B.station)}</b> · ${mName(B.month)} · проверяющий ${esc(B.checker || "—")} · операторов ${B.operators.length} · клиентов ${B.obs.length} · грубых ${B.gross.length}${B.shop.length ? " · тайный покупатель" : ""}</span>
+    ${bad && link ? `<span class="warn-t">Таблица пока пустая${B.station ? ` (станция ${esc(B.station)}, отметок нет)` : " — станция не указана"}. Её можно подключить сейчас: данные появятся на экране сами, как только в ней начнут ставить отметки.</span>
+      <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><label class="field" style="grid-auto-flow:column;align-items:center;gap:6px">Станция <select data-lnk-st>${D.stations.map(s => `<option value="${esc(s.code)}" ${s.code === B.station ? "selected" : ""}>${esc(s.code)}${s.name ? " · " + esc(s.name).slice(0, 30) : ""}</option>`).join("")}</select></label><button class="btn pri" type="button" data-lnk="${esc(link)}">Подключить таблицу</button></span>
+      <span class="muted">Это общий шаблон? Тогда сначала «Файл → Создать копию» для станции и вставьте ссылку на копию.</span>`
+    : bad ? `<span class="err-t">Не получится добавить: ${esc(B.warnings[0] || "нет данных")}</span>` : `<span><b>${esc(B.station)}</b> · ${mName(B.month)} · проверяющий ${esc(B.checker || "—")} · операторов ${B.operators.length} · клиентов ${B.obs.length} · грубых ${B.gross.length}${B.shop.length ? " · тайный покупатель" : ""}</span>
       <span>Станция: <b class="${lvl(R.pct)}">${pct(R.pct)}</b> · ${R.operators.map(o => `${esc(o.name)} ${pct(o.pct)}`).join(", ")} · взыскания ${rub(R.fines)}</span>${replace ? `<span class="warn-t">Эта станция за этот месяц уже загружена — заменится новой.</span>` : ""}`}
     ${!bad && B.warnings.length ? B.warnings.map(w => `<span class="warn-t">⚠ ${esc(w)}</span>`).join("") : ""}</div>`);
+  /* подключить пустую таблицу станции заранее */
+  $("#upPrev").querySelectorAll("[data-lnk]").forEach(b => b.onclick = async () => { const st = b.parentElement.querySelector("[data-lnk-st]").value; b.disabled = true;
+    const r = await fetch("/api/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ link: b.dataset.lnk, station: st }) });
+    if (r.ok) { await load(); openUpload(); $("#upPrev").innerHTML = `<div class="prev">✅ Таблица станции ${esc(st)} подключена. Экран будет проверять её раз в час — данные появятся, когда в ней поставят отметки.</div>`; } else { b.disabled = false; b.textContent = "Не получилось — ещё раз"; } });
   $("#upSave").hidden = !PENDING.length; $("#upSave").textContent = `Добавить на экран (${PENDING.length})`;
 }
 async function saveBlanks() {

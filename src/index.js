@@ -131,6 +131,12 @@ export default {
       ctx.waitUntil(caches.default.put(ck, new Response(buf, { headers: { "cache-control": "max-age=3000" } })));
       return new Response(buf, { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } });
     }
+    /* подключить таблицу станции заранее (бланк ещё пустой): ссылка — в автообновление, данные появятся, когда её заполнят */
+    if (p === "/api/link" && req.method === "POST") {
+      const b = await req.json().catch(() => ({})), link = String(b.link || ""), station = String(b.station || "");
+      if (!/^https:\/\/docs\.google\.com\/spreadsheets\/d\/[\w-]{20,}/.test(link) || !/^А-\d{1,3}$/.test(station)) return json({ error: "нужны ссылка на Google-таблицу и код станции" }, 400);
+      const L = ((await env.AZS.get("links", "json")) || []).filter(x => x.link !== link); L.push({ link, station, at: Date.now(), empty: true }); await env.AZS.put("links", JSON.stringify(L)); return json({ ok: true });
+    }
     if (p === "/api/link" && req.method === "DELETE") {
       const link = String(url.searchParams.get("link") || ""); await env.AZS.put("links", JSON.stringify(((await env.AZS.get("links", "json")) || []).filter(x => x.link !== link))); return json({ ok: true });
     }
