@@ -43,11 +43,17 @@ async function reviewGet(env, path) {
   if (r.status === 401) { t = await reviewToken(env, true); r = await fetch(env.REVIEW_API + path, { headers: { authorization: "Bearer " + t } }); }
   if (!r.ok) throw new Error(`админка отзывов: ${r.status}`); return r.json();
 }
-const loadReviews = env => cached("reviews", TTL, async () => {
+const loadReviews = env => cached("reviews:v2", TTL, async () => {
   if (!env.REVIEW_LOGIN || !env.REVIEW_PASSWORD) return { list: [], err: "админка отзывов не подключена" };
-  const list = [];
-  for (let page = 1; page <= 5; page++) { const d = await reviewGet(env, `/api/v1/admin/reviews?page=${page}&limit=100`); const items = Array.isArray(d.data) ? d.data : []; list.push(...items.map(fromApi)); if (items.length < 100) break; }
-  return { list };
+  /* до 500 последних; админка может отдать страницу больше или повторить ту же — берём по id без повторов, пустая/повторная страница — конец */
+  const list = [], seen = new Set(); let total = null;
+  for (let page = 1; page <= 10 && list.length < 500; page++) {
+    const d = await reviewGet(env, `/api/v1/admin/reviews?page=${page}&limit=100`), items = Array.isArray(d.data) ? d.data : []; total = d.pagination?.total_count ?? total;
+    let fresh = 0; for (const x of items) { const id = String(x.id ?? ""); if (!id || seen.has(id)) continue; seen.add(id); list.push(fromApi(x)); fresh++; }
+    if (!fresh || items.length < 100) break;
+  }
+  list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { list: list.slice(0, 500), total };
 });
 
 export default {
@@ -65,7 +71,7 @@ export default {
     if (p === "/api/health") {
       const out = { pass: !!env.MONITOR_PASS, sheet: !!env.SHEET_ID, reviews: !!(env.REVIEW_LOGIN && env.REVIEW_PASSWORD) };
       if (env.SHEET_ID) { try { const s = await loadSheet(env); out.sheetRows = Object.fromEntries(SHEETS.map(n => [n, (s[n] || []).length])); out.sheetErr = (s._err || []).length; } catch { out.sheetErr = 1; } }
-      if (out.reviews) { try { out.reviewCount = (await loadReviews(env)).list.length; } catch (e) { out.reviewErr = String(e.message).slice(0, 80); } }
+      if (out.reviews) { try { const r = await loadReviews(env); out.reviewCount = r.list.length; out.reviewTotal = r.total ?? null; } catch (e) { out.reviewErr = String(e.message).slice(0, 80); } }
       return json(out);
     }
     const ok = await authed(req, env);

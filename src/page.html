@@ -118,7 +118,7 @@ if (tv) document.body.classList.add("tv");
 
 function loginView() {
   $("#app").innerHTML = `<div class="login"><form method="post" action="/login"><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
-    <label class="muted" for="pw">Пароль руководителя</label><input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+    <input type="text" name="username" value="monitor" autocomplete="username" hidden aria-hidden="true"><label class="muted" for="pw">Пароль руководителя</label><input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
     ${LOGIN_ERR ? `<div class="err" role="alert">Пароль не подошёл. Попробуйте ещё раз.</div>` : ""}<button type="submit">Войти</button></form></div>`;
 }
 async function load() {
