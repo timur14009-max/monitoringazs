@@ -89,11 +89,20 @@ export function build(sheet, reviews, { month, today }) {
     return { ...s, pct, operators: op, fines, managerFine: Math.round(fines * S.managerShare), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
   };
   const cards = stations.map(card);
+  /* для графиков: отзывы по месяцам (12 последних), оценки 1–5 и источники за месяц, станции по отзывам (код или адрес), пункты стандарта по сети */
+  const short = n => String(n || "").replace(/^(АЗС|ЭЗС):\s*/, "").replace(/^г\.\s*Махачкала,\s*/, "").replace(/\s*—.*$/, "").trim() || "Станция не указана";
+  const months12 = [...Array(12)].map((_, i) => { const d = new Date(Date.parse(month + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() - 11 + i); return d.toISOString().slice(0, 7); });
+  const byMonth = months12.map(m => { const l = rv.filter(r => (r.date || "").slice(0, 7) === m); return { m, n: l.length, bad: l.filter(r => r.rating <= 2).length, avg: l.length ? Math.round(avg(l.map(r => r.rating)) * 100) / 100 : null }; });
+  const dist = [5, 4, 3, 2, 1].map(k => ({ stars: k, n: rvM.filter(r => Math.round(r.rating) === k).length }));
+  const SRC = ["telegram", "2gis", "yandex", "google"], bySource = SRC.map(k => ({ source: k, n: rvM.filter(r => r.source === k).length })).concat([{ source: "other", n: rvM.filter(r => !SRC.includes(r.source)).length }]).filter(x => x.n);
+  const places = new Map(); for (const r of rvM) { const k = r.station || short(r.stationName), x = places.get(k) || { name: k, code: r.station || null, sum: 0, n: 0, bad: 0 }; x.sum += r.rating; x.n++; if (r.rating <= 2) x.bad++; places.set(k, x); }
+  const byPlace = [...places.values()].map(x => ({ name: x.name, code: x.code, n: x.n, bad: x.bad, avg: Math.round(x.sum / x.n * 10) / 10 })).sort((a, b) => a.avg - b.avg || b.n - a.n);
+  const netItems = ITEMS.map((name, i) => { let d = 0, a = 0; for (const s of stations) { const t = items.get(s.code + "|" + i); if (t) { d += t.done; a += t.appl; } } return { name, pct: a ? Math.round(d / a * 100) : null }; });
   const allP = cards.map(c => c.pct).filter(x => x != null), allR = rvM.map(r => r.rating);
   return {
     month, settings: S, stations: cards,
     net: { pct: allP.length ? Math.round(avg(allP)) : null, checked: allP.length, rating: allR.length ? Math.round(avg(allR) * 10) / 10 : null, reviews: allR.length, bad: rvM.filter(r => r.rating <= 2).length, badToday: rv.filter(r => r.date === today && r.rating <= 2).length, gross: gross.length, fines: cards.reduce((a, c) => a + c.fines, 0), open: cards.reduce((a, c) => a + c.open, 0), overdue: cards.reduce((a, c) => a + c.overdue, 0) },
-    reviews: rv.slice(0, 200), unmatched,
+    reviews: rv.slice(0, 200), unmatched, charts: { byMonth, dist, bySource, byPlace, netItems },
     months: [...new Set([...(sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)), ...rv.map(r => (r.date || "").slice(0, 7))].filter(Boolean))].sort().reverse(),
   };
 }

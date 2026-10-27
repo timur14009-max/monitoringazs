@@ -27,4 +27,6 @@ const F = { ...sheet, "Находки ОСК и ОСБ": [{ "Дата": "20.10.2
 const fa1 = build(F, [], { month: "2026-10", today: "2026-10-27" }).stations.find(s => s.code === "А-1");
 ok("находка: не исправлена после срока — просрочена, станция красная", fa1.open === 1 && fa1.overdue === 1 && fa1.light === "red");
 ok("время по Москве: 23:30 UTC — уже следующий день", mskDate("2026-10-26 21:30:00") === "2026-10-27");
+const C = D2.charts;
+ok("графики: 12 месяцев, распределение оценок, источники, станции по отзывам, пункты по сети", C.byMonth.length === 12 && C.byMonth.at(-1).m === "2026-10" && C.byMonth.at(-1).n === 1 && C.dist.find(x => x.stars === 2).n === 1 && C.bySource[0].source === "telegram" && C.byPlace[0].code === "А-2" && C.netItems.find(x => x.name === "Предложил оформить карту").pct === 2, JSON.stringify(C).slice(0, 300));
 console.log(fail ? `⛔ расчёты: ${pass} прошло, ${fail} упало` : `✅ расчёты: все ${pass} прошли`); process.exit(fail ? 1 : 0);
