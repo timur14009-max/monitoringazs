@@ -11,5 +11,10 @@ REVIEW_API = "https://review.asko-plus.ru"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/client/*.mjs"]
 fallthrough = false
+
+# загруженные бланки ОСК по станциям (разбор — в браузере, здесь только готовые строки): up:<станция>:<месяц>, оглавление — up:index
+[[kv_namespaces]]
+binding = "AZS"
+id = "68c7465d137b4fec868298e51bf9945b"

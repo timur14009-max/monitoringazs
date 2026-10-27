@@ -1,6 +1,6 @@
 // Локальный предпросмотр экрана: данные А-2 из бланка + несколько ПРИМЕРНЫХ отзывов (вымышленные), без сети.
 import { readFileSync, writeFileSync } from "node:fs";
-import { build, parseCsv } from "../src/calc.js";
+import { build, parseCsv } from "../src/client/calc.mjs";
 const X = JSON.parse(readFileSync(new URL("./a2.json", import.meta.url)));
 const csv = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");
 const sheet = Object.fromEntries(Object.entries(X).map(([k, v]) => [k, parseCsv(csv(v))]));

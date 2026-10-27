@@ -1,6 +1,6 @@
 // Проверка расчётов на примере станции А-2 (бланк ОСК, октябрь 2026): проценты операторов и станции — как в бланке.
 import { readFileSync } from "node:fs";
-import { build, parseCsv, isoDate, measure, settings, fromApi, mskDate } from "../src/calc.js";
+import { build, parseCsv, isoDate, measure, settings, fromApi, mskDate } from "../src/client/calc.mjs";
 let pass = 0, fail = 0; const ok = (n, c, d = "") => { c ? pass++ : fail++; if (!c) console.log("❌", n, d); };
 const X = JSON.parse(readFileSync(new URL("./a2.json", import.meta.url)));
 const csv = rows => rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");

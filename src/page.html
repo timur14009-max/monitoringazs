@@ -19,6 +19,7 @@
 :root[data-theme="dark"] { --bg: #0e1412; --panel: #151d1a; --ink: #e4ece8; --ink2: #9fb0a8; --line: #26312d; --soft: #1b2522;
   --brand: #3fc191; --brand-ink: #08130e; --ok: #5fcf6d; --warn: #f2bd3d; --bad: #ff6b5e; --none: #5e6b65; --star: #ffc93d; color-scheme: dark }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); padding-top: env(safe-area-inset-top, 0px); }
 .wrap { max-width: 1500px; margin: 0 auto; padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
@@ -64,12 +65,26 @@ select.btn { padding-right: 28px; }
 .feed-h { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .feed-h b { margin-right: auto; }
 .feed-l { overflow-y: auto; padding: 6px 0; }
-.rv { padding: 10px 14px; border-bottom: 1px solid var(--soft); display: grid; gap: 3px; }
-.rv.bad { background: color-mix(in srgb, var(--bad) 7%, var(--panel)); border-left: 3px solid var(--bad); }
-.rv-h { display: flex; gap: 8px; align-items: baseline; font-size: 0.82rem; flex-wrap: wrap; }
-.rv-h b { font-size: 0.9rem; }
-.rv p { margin: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.rv { padding: 10px 14px; border-bottom: 1px solid var(--soft); display: grid; gap: 5px; border-left: 3px solid transparent; }
+.rv.bad { background: color-mix(in srgb, var(--bad) 6%, var(--panel)); border-left-color: var(--bad); }
+.rv-top { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.rv-top b { font-size: 0.92rem; flex: none; } .rv-st { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 0.8rem; }
+.rate { flex: none; font: 600 0.78rem/1 var(--f-num); padding: 4px 7px; border-radius: 6px; color: #fff; }
+.rate.r1 { background: var(--r1); } .rate.r2 { background: var(--r2); } .rate.r3 { background: var(--r3); color: var(--ink); } .rate.r4 { background: var(--r4); } .rate.r5 { background: var(--r5); }
+.rv-text { margin: 0; font-size: 0.9rem; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.rv-text.open { -webkit-line-clamp: unset; display: block; }
+.rv-meta { font-size: 0.76rem; color: var(--ink2); }
+.day { position: sticky; top: 0; z-index: 1; background: var(--panel); padding: 8px 14px 4px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink2); border-bottom: 1px solid var(--soft); }
 .src { font-size: 0.72rem; color: var(--ink2); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+.spec { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 10px; }
+.spec > div { border-radius: 12px; background: var(--soft); padding: 12px 14px; display: grid; gap: 6px; }
+.spec b { font-size: 1rem; } .spec .chips .chip { background: var(--panel); }
+.up-list { display: grid; gap: 6px; } .up-list > div { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 0.86rem; }
+.up-list > div > span:first-child { margin-right: auto; }
+.prev { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; font-size: 0.88rem; }
+.prev.err { border-color: var(--bad); } .warn-t { color: var(--warn); font-size: 0.82rem; } .err-t { color: var(--bad); font-size: 0.85rem; }
+.field { display: grid; gap: 4px; font-size: 0.85rem; color: var(--ink2); } .field input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 15px; }
+.btn.pri { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
 @media (max-width: 1100px) { .feed { position: static; max-height: 70vh; } }
 /* подробности станции */
 dialog { border: 0; padding: 0; border-radius: 14px; background: var(--panel); color: var(--ink); width: min(1000px, calc(100vw - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
@@ -137,8 +152,10 @@ body.tv { font-size: 17px; } body.tv .grid { grid-template-columns: repeat(auto-
 <div class="wrap" id="app"></div>
 <dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
 <div id="tip" role="tooltip"></div>
-<script>
-const AUTH = "__AUTH__" === "1", LOGIN_ERR = "__ERR__" === "1";
+<script type="module">
+import { build, mergeUploads } from "/js/calc.mjs";
+import { readXlsx, parseBlank } from "/js/blank.mjs";
+const ROLE = "__AUTH__", AUTH = ROLE === "boss" || ROLE === "osk", LOGIN_ERR = "__ERR__" === "1";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rub = n => Math.round(+n || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
@@ -149,7 +166,7 @@ const SRC = { telegram: "Telegram", "2gis": "2ГИС", yandex: "Яндекс", g
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 const mName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
 const dd = d => d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
-let D = null, month = "", onlyBad = false, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
+let RAW = null, D = null, month = "", onlyBad = false, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
 try { onlyBad = localStorage.getItem("azs-bad") === "1"; } catch {}
 if (tv) document.body.classList.add("tv");
 
@@ -158,21 +175,34 @@ function loginView() {
     <input type="text" name="username" value="monitor" autocomplete="username" hidden aria-hidden="true"><label class="muted" for="pw">Пароль руководителя</label><input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
     ${LOGIN_ERR ? `<div class="err" role="alert">Пароль не подошёл. Попробуйте ещё раз.</div>` : ""}<button type="submit">Войти</button></form></div>`;
 }
+/* данные сырые — считаем здесь (бланки станций поверх таблицы ОСК, отзывы), месяц меняется без запроса к серверу */
+function compute() { D = { ...build(mergeUploads(RAW.sheet || {}, RAW.uploads || []), RAW.reviews || [], { month: month || RAW.today.slice(0, 7), today: RAW.today }), errors: RAW.errors || [], at: RAW.at, uploadIndex: RAW.uploadIndex || [] }; month = D.month; }
 async function load() {
-  try { const r = await fetch("/api/data" + (month ? "?m=" + month : ""), { cache: "no-store" }); if (r.status === 401) { location.reload(); return; } D = await r.json(); if (!month) month = D.month; render(); }
-  catch { const a = $("#status"); if (a) a.textContent = "Нет связи — показаны прежние данные"; }
+  try { const r = await fetch("/api/data", { cache: "no-store" }); if (r.status === 401) { location.reload(); return; } RAW = await r.json(); compute(); if (!$("#dlg").open) render(); }
+  catch (e) { console.error(e); const a = $("#status"); if (a) a.textContent = "Нет связи — показаны прежние данные"; }
 }
 function card(s) {
   return `<button class="st" data-l="${s.light}" data-code="${esc(s.code)}" type="button" aria-label="Станция ${esc(s.code)}">
-    <div class="st-h"><b>${esc(s.code)}</b><span>${esc(s.manager || s.name || "")}</span></div>
+    <div class="st-h"><b>${esc(s.code)}</b><span>${esc(s.name || s.manager || "")}</span></div>
+    <div class="row" style="font-size:.8rem"><span class="muted">ОСК</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${s.osk ? esc(s.osk) : `<span class="muted">—</span>`}</span></div>
     <div class="mini">${ring(s.pct, 54, 6)}<div style="display:grid;gap:2px;min-width:0"><span class="muted">стандарт операторов</span>${s.pct == null ? `<span class="muted">проверок нет</span>` : `<b class="${lvl(s.pct)}" style="font-family:var(--f-num)">${s.pct}%</b>`}</div></div>
     <div class="row"><span>Отзывы</span>${s.reviews ? `<span><span class="stars" aria-hidden="true">${stars(s.rating)}</span> <b>${s.rating.toFixed(1)}</b> <span class="muted">(${s.reviews})</span></span>` : `<span class="muted">нет</span>`}</div>
     <div class="chips">${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
   </button>`;
 }
-function rvItem(r) {
-  return `<div class="rv ${r.rating <= 2 ? "bad" : ""}"><div class="rv-h"><b>${esc(r.station || r.stationName.replace(/^(АЗС|ЭЗС):\s*/, "").slice(0, 40) || "Станция не указана")}</b><span class="stars" aria-label="${r.rating} из 5">${stars(r.rating)}</span><span class="muted">${dd(r.date)}</span><span class="src">${esc(SRC[r.source] || r.source)}</span></div>
-    <p>${esc(r.text || "Без текста")}</p>${r.author ? `<span class="muted">${esc(r.author)}</span>` : ""}</div>`;
+const shortAddr = n => String(n || "").replace(/^(АЗС|ЭЗС):\s*/, "").replace(/^г\.\s*Махачкала,\s*/, "").replace(/\s*—.*$/, "") || "станция не указана";
+function rvItem(r, withStation = true) {
+  const name = r.station ? (D.stations.find(s => s.code === r.station)?.name || shortAddr(r.stationName)) : shortAddr(r.stationName), k = Math.max(1, Math.min(5, Math.round(r.rating)));
+  return `<article class="rv ${r.rating <= 2 ? "bad" : ""}">
+    <div class="rv-top"><span class="rate r${k}" aria-label="${r.rating} из 5">${r.rating}★</span>${withStation ? `<b>${esc(r.station || "без кода")}</b><span class="muted rv-st" title="${esc(r.stationName)}">${esc(name)}</span>` : ""}</div>
+    <p class="rv-text">${esc(r.text || "Без текста")}</p>
+    <div class="rv-meta">${dd(r.date)}${r.time ? " · " + r.time : ""} · ${esc(SRC[r.source] || r.source)}${r.author ? " · " + esc(r.author) : ""}</div></article>`;
+}
+/* лента: только выбранный месяц, по дням (сегодня / вчера / дата) */
+function feedHtml(list, withStation = true) {
+  const t = RAW.today, y = new Date(Date.parse(t + "T12:00:00Z") - 864e5).toISOString().slice(0, 10); let day = "", out = "";
+  for (const r of list) { if (r.date !== day) { day = r.date; out += `<div class="day">${day === t ? "Сегодня" : day === y ? "Вчера" : +day.slice(8) + " " + ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"][+day.slice(5, 7) - 1]}</div>`; } out += rvItem(r, withStation); }
+  return out;
 }
 const ORDER = { red: 0, yellow: 1, green: 2, none: 3 };
 const MS = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -215,12 +245,12 @@ function ratingChart(rows) {
 const SRCC = { telegram: "var(--s1)", "2gis": "var(--s2)", yandex: "var(--s3)", google: "var(--s4)", other: "var(--none)" };
 function render() {
   const N = D.net, C = D.charts, list = [...D.stations].sort((a, b) => ORDER[a.light] - ORDER[b.light] || (a.pct ?? 999) - (b.pct ?? 999) || (a.rating ?? 9) - (b.rating ?? 9));
-  const rv = D.reviews.filter(r => !onlyBad || r.rating <= 2), dmax = Math.max(1, ...C.dist.map(x => x.n)), stot = C.bySource.reduce((a, x) => a + x.n, 0);
+  const rv = D.reviews.filter(r => (r.date || "").slice(0, 7) === D.month && (!onlyBad || r.rating <= 2)), dmax = Math.max(1, ...C.dist.map(x => x.n)), stot = C.bySource.reduce((a, x) => a + x.n, 0);
   $("#app").innerHTML = `
   <header><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
     <span class="muted" id="status">обновлено ${new Date(D.at).toTimeString().slice(0, 5)} · само каждую минуту</span>
     <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
-    <button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
+    <button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
   <section class="hero" aria-label="Сеть за ${mName(D.month)}">
     <div class="panel"><h3>Стандарт обслуживания · сеть</h3><div class="gauge">${ring(N.pct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.pct)}</b></span><span>норма — 85%</span><span>проверено станций: <b>${N.checked} из ${D.stations.length}</b></span></div></div></div>
@@ -239,13 +269,17 @@ function render() {
     <div class="panel"><h3>Станции по отзывам · ${mName(D.month)} · сначала худшие</h3>${C.byPlace.length ? `<div class="hbar">${C.byPlace.map(p => `<div class="hbar-r" ${tip(`${p.name}: ★${p.avg.toFixed(1)}, отзывов ${p.n}, плохих ${p.bad}`)}><span>${p.code ? `<b>${esc(p.code)}</b>` : esc(p.name)}</span><div class="track"><i style="width:${(p.avg / 5 * 100).toFixed(1)}%;background:${stCol(p.avg, 4.5, 4)}"></i></div><span class="num">★${p.avg.toFixed(1)} · ${p.n}</span></div>`).join("")}</div>` : `<div class="empty">За месяц отзывов нет.</div>`}
       <h3 style="margin-top:10px">Пункты стандарта · сеть</h3>${C.netItems.some(x => x.pct != null) ? `<div class="hbar">${C.netItems.map(x => `<div class="hbar-r" ${tip(`${x.name}: ${pct(x.pct)} (норма 85%)`)}><span>${esc(x.name)}</span><div class="track"><i style="width:${x.pct || 0}%;background:${stCol(x.pct, 85, 70)}"></i><u style="left:85%"></u></div><span class="num">${pct(x.pct)}</span></div>`).join("")}</div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
   </section>
+  <section class="panel" aria-label="Специалисты ОСК"><h3>Специалисты ОСК · кто за какими станциями</h3>${D.specialists.length ? `<div class="spec">${D.specialists.map(x => `<div><b>${esc(x.name)}</b><span class="muted">станций ${x.stations.length} · проверено смен ${x.shifts}${x.pct != null ? ` · средний результат <b class="${lvl(x.pct)}">${x.pct}%</b>` : ""}</span><div class="chips">${x.stations.map(c => { const s = D.stations.find(y => y.code === c); return `<span class="chip" style="border-left:3px solid ${s.light === "red" ? "var(--bad)" : s.light === "yellow" ? "var(--warn)" : s.light === "green" ? "var(--ok)" : "var(--none)"}">${esc(c)}${s.pct != null ? " · " + s.pct + "%" : " · нет проверок"}</span>`; }).join("")}</div></div>`).join("")}</div>` : `<div class="empty">Пока ни за кем не закреплено. Специалист станции берётся из бланка («Проверяющий») или из колонки «Специалист ОСК» листа «Станции».</div>`}
+    ${D.stations.filter(s => !s.osk).length && D.specialists.length ? `<div class="muted">Без специалиста: ${D.stations.filter(s => !s.osk).map(s => esc(s.code)).join(", ")}</div>` : ""}</section>
   ${D.unmatched.length ? `<div class="alert hide-tv">Станции в отзывах ещё не сопоставлены с кодами АЗС (${D.unmatched.length}) — поэтому у плиток «Отзывы: нет». Сопоставление делает Claude по вашему ответу.</div>` : ""}
   <div class="main">
     <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>
-    <aside class="feed" aria-label="Отзывы"><div class="feed-h"><b>Отзывы — сейчас</b><button class="btn" id="bad" type="button" aria-pressed="${onlyBad}">Только плохие</button></div>
-      <div class="feed-l">${rv.length ? rv.slice(0, 80).map(rvItem).join("") : `<div class="empty" style="padding:14px">${D.reviews.length ? "Плохих отзывов нет 👍" : "Отзывов пока нет."}</div>`}</div></aside>
+    <aside class="feed" aria-label="Отзывы"><div class="feed-h"><b>Отзывы · ${mName(D.month)}</b><button class="btn" id="bad" type="button" aria-pressed="${onlyBad}">Только плохие</button></div>
+      <div class="feed-l">${rv.length ? feedHtml(rv.slice(0, 150)) : `<div class="empty" style="padding:14px">${onlyBad ? "Плохих отзывов за месяц нет 👍" : "За этот месяц отзывов нет."}</div>`}</div></aside>
   </div>`;
-  $("#month").onchange = e => { month = e.target.value; load(); };
+  $("#month").onchange = e => { month = e.target.value; compute(); render(); };
+  $("#up").onclick = openUpload;
+  document.querySelectorAll(".rv-text").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#tv").onclick = () => { tv = !tv; document.body.classList.toggle("tv", tv); render(); };
   $("#bad").onclick = () => { onlyBad = !onlyBad; try { localStorage.setItem("azs-bad", onlyBad ? "1" : "0"); } catch {} render(); };
   document.querySelectorAll(".st").forEach(b => b.onclick = () => openStation(b.dataset.code));
@@ -254,9 +288,9 @@ function render() {
 document.addEventListener("mousemove", e => { const t = e.target.closest && e.target.closest("[data-tip]"), el = $("#tip"); if (!el) return; if (!t) { el.style.display = "none"; return; } el.textContent = t.getAttribute("data-tip"); el.style.display = "block"; const x = Math.min(e.clientX + 14, innerWidth - el.offsetWidth - 8), y = e.clientY + 16 + el.offsetHeight > innerHeight ? e.clientY - el.offsetHeight - 10 : e.clientY + 16; el.style.left = x + "px"; el.style.top = y + "px"; });
 function openStation(code) {
   const s = D.stations.find(x => x.code === code); if (!s) return;
-  const rs = D.reviews.filter(r => r.station === code);
+  const rs = D.reviews.filter(r => r.station === code && (r.date || "").slice(0, 7) === D.month);
   $("#dlg").innerHTML = `<div class="dlg">
-    <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><button class="btn x" type="button" id="close">Закрыть</button></div>
+    <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager, s.osk && "ОСК: " + s.osk].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><button class="btn x" type="button" id="close">Закрыть</button></div>
     <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
       <div class="kpi"><b class="${lvl(s.pct)}">${pct(s.pct)}</b><small>стандарт операторов</small></div>
       <div class="kpi"><b>${s.rating == null ? "—" : "★ " + s.rating.toFixed(1)}</b><small>отзывы · ${s.reviews}, плохих ${s.bad}</small></div>
@@ -269,12 +303,56 @@ function openStation(code) {
       <div><h3>Тайный покупатель</h3>${s.shop.length ? s.shop.slice(0, 3).map(v => `<div class="list"><div><b>${dd(v.date)} — ${pct(v.pct)}</b><br>${v.sections.filter(x => x.pct != null).map(x => `${esc(x.section)}: ${x.pct}%`).join(" · ")}${v.note ? `<br><span class="muted">${esc(v.note)}</span>` : ""}</div></div>`).join("") : `<div class="empty">Проверок тайного покупателя за месяц нет.</div>`}</div>
       <div><h3>Находки ОСК и ОСБ</h3>${s.finds.length ? `<div class="list">${s.finds.slice(0, 8).map(f => `<div><b class="${!f.fixed && f.due && f.due < new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10) ? "lv-bad" : f.fixed ? "lv-ok" : "lv-warn"}">${f.fixed ? "исправлено" : f.due ? "до " + dd(f.due) : "открыто"}</b> · ${dd(f.date)} · ${esc(f.who)}<br>${esc(f.what)}${f.to ? ` <span class="muted">→ ${esc(f.to)}</span>` : ""}</div>`).join("")}</div>` : `<div class="empty">Находок нет.</div>`}</div>
     </div>
-    <div><h3>Отзывы о станции</h3>${rs.length ? `<div class="list" style="max-height:320px;overflow:auto">${rs.slice(0, 30).map(rvItem).join("")}</div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
+    <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px">${feedHtml(rs.slice(0, 60), false)}</div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
   </div>`;
   $("#close").onclick = () => $("#dlg").close();
+  document.querySelectorAll("#dlg .rv-text").forEach(p => p.onclick = () => p.classList.toggle("open"));
   $("#dlg").showModal();
 }
+/* 📤 бланк ОСК станции: файл Excel или ссылка на Google-таблицу → разбор здесь → показываем, что нашли → «Добавить на экран» */
+let PENDING = [];
+function openUpload() {
+  const idx = [...(D.uploadIndex || [])].sort((a, b) => b.at - a.at);
+  $("#dlg").innerHTML = `<div class="dlg">
+    <div class="dlg-h"><h2 id="dlgTitle">Бланк ОСК станции</h2><span class="muted">файл бланка (Excel) или ссылка на Google-таблицу станции</span><button class="btn x" type="button" id="close">Закрыть</button></div>
+    <div class="cols"><label class="field" for="upFile">Файлы бланков (можно несколько)<input id="upFile" type="file" accept=".xlsx" multiple></label>
+      <label class="field" for="upLink">или ссылка на Google-таблицу<span style="display:flex;gap:6px"><input id="upLink" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:0"><button class="btn" id="upGo" type="button">Открыть</button></span></label></div>
+    <div id="upPrev" class="up-list"></div>
+    <div><button class="btn pri" id="upSave" type="button" hidden>Добавить на экран</button></div>
+    <div><h3>Уже загружено</h3>${idx.length ? `<div class="up-list">${idx.map(x => `<div><span><b>${esc(x.station)}</b> · ${mName(x.month)} · ${esc(x.checker || "")} <span class="muted">· клиентов ${x.obs}, грубых ${x.gross}${x.shop ? ", тайный покупатель" : ""} · ${esc(x.file || "")} · ${new Date(x.at).toLocaleDateString("ru-RU")} ${x.by === "osk" ? "(ОСК)" : "(руководство)"}</span></span>${x.link ? `<button class="btn" type="button" data-relink="${esc(x.link)}">Обновить из таблицы</button>` : ""}<button class="btn" type="button" data-del="${esc(x.key)}">Убрать</button></div>`).join("")}</div>` : `<div class="empty">Пока ничего не загружено.</div>`}</div>
+  </div>`;
+  PENDING = [];
+  $("#close").onclick = () => $("#dlg").close();
+  $("#upFile").onchange = async e => { for (const f of e.target.files) await addBlank(await f.arrayBuffer(), f.name, ""); };
+  $("#upGo").onclick = () => fromLink($("#upLink").value.trim());
+  $("#upSave").onclick = saveBlanks;
+  $("#dlg").querySelectorAll("[data-relink]").forEach(b => b.onclick = () => fromLink(b.dataset.relink));
+  $("#dlg").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Точно убрать?"; return; } b.disabled = true; await fetch("/api/upload?key=" + encodeURIComponent(b.dataset.del), { method: "DELETE" }); await load(); openUpload(); });
+  if (!$("#dlg").open) $("#dlg").showModal();
+}
+async function fromLink(link) {
+  if (!link) return; const box = $("#upPrev"); box.insertAdjacentHTML("beforeend", `<div class="prev" id="lnk">Открываю таблицу…</div>`);
+  try { const r = await fetch("/api/gsheet?link=" + encodeURIComponent(link)); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "таблица не открылась"); $("#lnk")?.remove(); await addBlank(await r.arrayBuffer(), "Google-таблица", link); }
+  catch (e) { const el = $("#lnk"); if (el) { el.id = ""; el.className = "prev err"; el.innerHTML = `<span class="err-t">Ссылка: ${esc(e.message)}</span>`; } }
+}
+async function addBlank(buf, file, link) {
+  let B; try { B = parseBlank(await readXlsx(buf)); } catch (e) { $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev err"><b>${esc(file)}</b><span class="err-t">Не прочитался: ${esc(e.message)}. Нужен файл .xlsx (в Excel: «Сохранить как» → «Книга Excel»).</span></div>`); return; }
+  const bad = !B.station || !B.month || !B.obs.length, R = !bad && build(mergeUploads(RAW.sheet || {}, [B]), [], { month: B.month, today: RAW.today }).stations.find(s => s.code === B.station);
+  const replace = (D.uploadIndex || []).some(x => x.station === B.station && x.month === B.month);
+  if (!bad) PENDING.push({ ...B, file, link });
+  $("#upPrev").insertAdjacentHTML("beforeend", `<div class="prev ${bad ? "err" : ""}"><b>${esc(file)}</b>
+    ${bad ? `<span class="err-t">Не получится добавить: ${esc(B.warnings[0] || "нет данных")}</span>` : `<span><b>${esc(B.station)}</b> · ${mName(B.month)} · проверяющий ${esc(B.checker || "—")} · операторов ${B.operators.length} · клиентов ${B.obs.length} · грубых ${B.gross.length}${B.shop.length ? " · тайный покупатель" : ""}</span>
+      <span>Станция: <b class="${lvl(R.pct)}">${pct(R.pct)}</b> · ${R.operators.map(o => `${esc(o.name)} ${pct(o.pct)}`).join(", ")} · взыскания ${rub(R.fines)}</span>${replace ? `<span class="warn-t">Эта станция за этот месяц уже загружена — заменится новой.</span>` : ""}`}
+    ${!bad && B.warnings.length ? B.warnings.map(w => `<span class="warn-t">⚠ ${esc(w)}</span>`).join("") : ""}</div>`);
+  $("#upSave").hidden = !PENDING.length; $("#upSave").textContent = `Добавить на экран (${PENDING.length})`;
+}
+async function saveBlanks() {
+  const b = $("#upSave"); b.disabled = true; let ok = 0, err = "";
+  for (const B of PENDING) { const r = await fetch("/api/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(B) }); if (r.ok) ok++; else err = (await r.json().catch(() => ({}))).error || "не сохранилось"; }
+  PENDING = []; await load(); openUpload(); $("#upPrev").innerHTML = `<div class="prev">${ok ? `✅ Добавлено бланков: ${ok}. Экран обновлён.` : ""}${err ? `<span class="err-t">${esc(err)}</span>` : ""}</div>`;
+}
 if (!AUTH) loginView(); else { load(); timer = setInterval(() => { if (!$("#dlg").open) load(); }, 60000); }
+$("#dlg").addEventListener("close", () => { if (RAW) render(); });
 </script>
 </body>
 </html>
