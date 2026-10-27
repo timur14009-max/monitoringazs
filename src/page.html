@@ -130,9 +130,10 @@ select.btn { padding-right: 28px; }
 .btn.pri { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
 @media (max-width: 1100px) { .feed { position: static; max-height: 70vh; } }
 /* подробности станции */
-dialog { border: 0; padding: 0; border-radius: 14px; background: var(--panel); color: var(--ink); width: min(1000px, calc(100vw - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog { border: 0; padding: 0; border-radius: 14px; background: var(--panel); color: var(--ink); width: min(1240px, calc(100vw - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
 dialog::backdrop { background: rgba(5, 10, 8, .55); }
-.dlg { display: grid; gap: 16px; padding: 18px 20px 22px; }
+.dlg { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 18px 20px 22px; } .dlg > *, .cols > * { min-width: 0; }
+.dlg-h { flex-wrap: wrap; row-gap: 8px; }
 .dlg-h { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .dlg-h h2 { margin: 0; font-size: 1.4rem; } .dlg-h .x { margin-left: auto; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
@@ -140,11 +141,20 @@ h3 { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spac
 .tbl { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--soft); text-align: left; white-space: nowrap; } th { color: var(--ink2); font-weight: 500; font-size: 0.78rem; }
 td.n { font-family: var(--f-num); font-variant-numeric: tabular-nums; text-align: right; }
-.lv-ok { color: var(--ok); } .lv-warn { color: var(--warn); } .lv-bad { color: var(--bad); }
+.lv-ok { color: var(--ok); } .lv-warn { color: var(--warn); } .lv-bad { color: var(--bad); } .lv-top { color: var(--top); font-weight: 600; } .lv-att { color: var(--att); }
+/* 5 ступеней бланка: плашки и подсветка */
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font: 600 0.82rem/1.5 var(--f-num); background: var(--soft); color: var(--ink2); white-space: nowrap; }
+.pill.top { background: var(--top); color: #fff; } .pill.ok { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); color: var(--ok); } .pill.warn { background: color-mix(in srgb, var(--warn) 25%, var(--panel)); color: color-mix(in srgb, var(--warn) 75%, var(--ink)); } .pill.att { background: color-mix(in srgb, var(--att) 22%, var(--panel)); color: var(--att); } .pill.bad { background: var(--bad); color: #fff; }
+.legend5 { display: flex; flex-wrap: wrap; gap: 6px; } .legend5 .pill { font-family: var(--f-body); font-weight: 500; font-size: 0.76rem; }
+.kpi.top b { color: var(--top); } .kpi.att b { color: var(--att); } .kpi.top { border-color: color-mix(in srgb, var(--top) 50%, var(--line)); }
+tr.bad td { background: color-mix(in srgb, var(--bad) 6%, var(--panel)); } tr.sum td { font-weight: 600; background: var(--soft); }
 .it { display: grid; grid-template-columns: 170px 1fr 44px; gap: 8px; align-items: center; font-size: 0.86rem; } .it .num { text-align: right; }
 .list { display: grid; gap: 6px; font-size: 0.88rem; } .list > div { padding: 7px 10px; border-radius: 8px; background: var(--soft); overflow-wrap: anywhere; }
 .empty { color: var(--ink2); font-size: 0.88rem; padding: 6px 0; }
 /* наглядная часть: кольца, распределения, графики по месяцам */
+:root { --top: #136f3a; --att: #d0661a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --top: #3fbf72; --att: #ff9147; } }
+:root[data-theme="dark"] { --top: #3fbf72; --att: #ff9147; }
 :root { --r5: #2f8a3d; --r4: #7cb87f; --r3: #b9c0bc; --r2: #e8907f; --r1: #c8342b; --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --grid: #e6ebe8; --axis: #8c9691; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --r5: #5fcf6d; --r4: #3f8f4b; --r3: #59625e; --r2: #b55a4e; --r1: #ff6b5e; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --grid: #222c28; --axis: #7d8a84; } }
 :root[data-theme="dark"] { --r5: #5fcf6d; --r4: #3f8f4b; --r3: #59625e; --r2: #b55a4e; --r1: #ff6b5e; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --grid: #222c28; --axis: #7d8a84; }
@@ -204,7 +214,26 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rub = n => Math.round(+n || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
 const pct = v => v == null ? "—" : v + "%";
-const lvl = v => v == null ? "" : v >= 85 ? "lv-ok" : v >= 70 ? "lv-warn" : "lv-bad";
+/* шкала бланка ОСК в 5 ступеней: 90+ кандидат на поощрение · 85–89 норма · 70–84 замечания · 50–69 внимание · <50 критично */
+const lvl = v => v == null ? "" : v >= 90 ? "lv-top" : v >= 85 ? "lv-ok" : v >= 70 ? "lv-warn" : v >= 50 ? "lv-att" : "lv-bad";
+const tone = v => v == null ? "" : v >= 90 ? "top" : v >= 85 ? "ok" : v >= 70 ? "warn" : v >= 50 ? "att" : "bad";
+const rowTone = v => v == null ? "" : v < 50 ? "bad" : "";
+const col5 = v => v == null ? "var(--none)" : v >= 90 ? "var(--top)" : v >= 85 ? "var(--ok)" : v >= 70 ? "var(--warn)" : v >= 50 ? "var(--att)" : "var(--bad)";
+const levelName = v => v == null ? "нет данных" : v >= 90 ? "кандидат на поощрение" : v >= 85 ? "норма" : v >= 70 ? "замечания" : v >= 50 ? "внимание" : "критично";
+const legend5 = () => `<div class="legend5"><span class="pill top">90%+ кандидат на поощрение</span><span class="pill ok">85–89% норма</span><span class="pill warn">70–84% замечания</span><span class="pill att">50–69% внимание</span><span class="pill bad">&lt;50% критично</span></div>`;
+/* резервный фонд — три блока, как лист «Резервный фонд» бланка */
+function fundHtml(f) {
+  const row = (t, v, n, cls = "") => `<tr class="${cls}"><td>${t}</td><td class="n"><b>${v}</b></td><td class="muted">${n}</td></tr>`, MS3 = f.qMonths.map(m => MONTHS[+m.slice(5, 7) - 1].slice(0, 3));
+  return `<div class="cols"><div><div class="tbl"><table><thead><tr><th colspan="3">1. Движение фонда за ${mName(f.month)}</th></tr></thead><tbody>
+      ${row("Остаток с прошлого месяца", rub(f.open), "переносится сам")}${row("+ Взыскания с операторов", rub(f.inOps), "из свода по станции")}${row("+ Взыскание с управляющего", rub(f.inMgr), "из свода по станции")}
+      ${row("Итого в фонде", rub(f.total), "")}${row("− Направлено на поощрения", f.paid ? rub(f.paid) : "0 ₽", "только в 3-м месяце квартала")}${row("Остаток на следующий месяц", rub(f.balance), "переходит сам", "sum")}</tbody></table></div></div>
+    <div><div class="tbl"><table><thead><tr><th colspan="3">2. Расчёт поощрений за квартал</th></tr></thead><tbody>
+      ${row("Порог: средний результат за квартал", f.cfg.bonusPct + "%", "задаётся в «Настройках» бланка")}${row("Грубых нарушений в месяц — не больше", f.cfg.bonusMaxGross, "больше хотя бы в одном месяце — не положено")}
+      ${row("Доля фонда на поощрения", Math.round(f.cfg.bonusShare * 100) + "%", "остальное остаётся в резерве")}${row("Сумма на поощрения", f.quarterMonth === 3 ? rub(f.pool) : "—", "считается только в 3-м месяце квартала")}
+      ${row("Претендуют на поощрение", f.candidates.filter(c => c.ok).length, "средний результат не ниже порога, грубых в норме")}${row("Поощрение каждому", f.quarterMonth === 3 ? rub(f.each) : "—", "поровну, округление вниз до 10 ₽", "sum")}</tbody></table></div></div></div>
+    <div class="tbl"><table><thead><tr><th>3. Итоги квартала</th>${MS3.map((m, i) => `<th>${i + 1}-й мес. (${m}), %</th><th>грубых</th>`).join("")}<th>Средний %</th><th>Грубых всего</th><th>Поощрение</th><th>Статус</th></tr></thead><tbody>
+      ${f.candidates.map(c => `<tr><td>${c.ok ? "⭐ " : ""}<b>${esc(c.name)}</b></td>${c.byM.map(x => `<td class="n ${lvl(x.pct)}">${pct(x.pct)}</td><td class="n">${x.gross ?? "—"}</td>`).join("")}<td class="n"><span class="pill ${tone(c.qAvg)}">${pct(c.qAvg)}</span></td><td class="n">${c.gSum}</td><td class="n">${c.bonus ? `<b class="lv-top">${rub(c.bonus)}</b>` : "—"}</td><td class="${c.ok ? "lv-top" : "muted"}">${esc(c.status)}</td></tr>`).join("")}</tbody></table></div>`;
+}
 const stars = r => "★".repeat(Math.round(r || 0)) + "☆".repeat(5 - Math.round(r || 0));
 const SRC = { telegram: "Telegram", "2gis": "2ГИС", yandex: "Яндекс", google: "Google" };
 const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
@@ -212,7 +241,8 @@ const mName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
 const dd = d => d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
 let RAW = null, D = null, month = "", tab = "overview", RF = { st: "", rate: "", src: "", per: "month", q: "", sort: "new", shown: 60 }, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
 let RK = "operators";
-try { tab = ["reviews", "rating"].includes(localStorage.getItem("azs-tab")) ? localStorage.getItem("azs-tab") : "overview"; RK = localStorage.getItem("azs-rk") || "operators"; } catch {}
+let BONLY = true;
+try { tab = ["reviews", "rating", "bonus"].includes(localStorage.getItem("azs-tab")) ? localStorage.getItem("azs-tab") : "overview"; RK = localStorage.getItem("azs-rk") || "operators"; } catch {}
 if (tv) document.body.classList.add("tv");
 
 function loginView() {
@@ -319,8 +349,8 @@ function render() {
     <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
     <button class="btn hide-tv" id="pdfAll" type="button" title="Отчёт по всей сети за выбранный месяц: сводка, все АЗС, кого проверить, каждая станция с новой страницы">📄 PDF по сети</button><button class="btn pri hide-tv" id="up" type="button">📤 Бланк ОСК</button><button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
   ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
-  <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="rating" aria-selected="${tab === "rating"}">Рейтинг</button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
-  ${tab === "reviews" && !tv ? reviewsTab() : tab === "rating" && !tv ? ratingTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
+  <nav class="tabs hide-tv" role="tablist"><button class="tab" role="tab" type="button" data-tab="overview" aria-selected="${tab === "overview"}">Обзор сети</button><button class="tab" role="tab" type="button" data-tab="rating" aria-selected="${tab === "rating"}">Рейтинг</button><button class="tab" role="tab" type="button" data-tab="bonus" aria-selected="${tab === "bonus"}">Поощрения<span class="n">${D.bonuses.filter(b => b.ok).length}</span></button><button class="tab" role="tab" type="button" data-tab="reviews" aria-selected="${tab === "reviews"}">Отзывы<span class="n">${inMonth}</span></button></nav>
+  ${tab === "reviews" && !tv ? reviewsTab() : tab === "rating" && !tv ? ratingTab() : tab === "bonus" && !tv ? bonusTab() : `<section class="hero" aria-label="Сеть за ${mName(D.month)}">
     <div class="panel"><h3>Стандарт обслуживания · сейчас</h3><div class="gauge">${ring(N.nowPct)}<div class="gauge-t"><span>Операторы выполняют стандарт на <b>${pct(N.nowPct)}</b> <span class="muted">— по 3 последним сменам каждого</span></span><span>норма — 85% · за ${mName(D.month)}: <b>${pct(N.pct)}</b></span><span>план ОСК за месяц: <b>${N.plan.done} из ${N.plan.need}</b> смен${N.plan.need ? ` (${Math.round(N.plan.done / N.plan.need * 100)}%)` : ""}</span>${N.stale ? `<span class="lv-warn">давно не проверяли: ${N.stale} операторов</span>` : ""}</div></div></div>
     <div class="panel"><h3>Оценка посетителей · ${mName(D.month)}</h3>
       <div class="mini"><span class="big" style="color:${stCol(N.rating, 4.5, 4)}">${N.rating == null ? "—" : N.rating.toFixed(1)}</span><span class="muted"><span class="stars" aria-hidden="true">${stars(N.rating)}</span><br>${N.reviews} отзывов, плохих ${N.bad}</span></div>
@@ -359,6 +389,8 @@ function render() {
   }
   document.querySelectorAll("[data-goto]").forEach(b => b.onclick = e => { e.preventDefault(); openStation(b.dataset.goto); });
   document.querySelectorAll("[data-rk]").forEach(b => b.onclick = () => { RK = b.dataset.rk; try { localStorage.setItem("azs-rk", RK); } catch {} render(); });
+  const bo = $("#bonly"); if (bo) bo.onclick = () => { BONLY = !BONLY; render(); };
+  const bp = $("#bpdf"); if (bp) bp.onclick = () => printHtml(`<div class="dlg">${bonusTab(true)}</div>` + `<div class="sign"><p>Утверждаю: ______________________ / ______________ «___» ________ 20__</p></div>`);
 }
 /* тренд к 3 сменам до этого и свежесть последней проверки */
 const trendOf = o => o.trend == null ? `<span class="muted">—</span>` : o.trend > 2 ? `<span class="lv-ok">↑ +${o.trend}</span>` : o.trend < -2 ? `<span class="lv-bad">↓ ${o.trend}</span>` : `<span class="muted">→ ${o.trend > 0 ? "+" : ""}${o.trend}</span>`;
@@ -384,6 +416,26 @@ function ratingTab() {
     <div class="rsum">🟢 исправились <b>${cnt("up")}</b> · ⚪ на месте <b>${cnt("flat")}</b> · 🔴 ухудшились <b>${cnt("down")}</b> · 🔴🔴 падают постоянно <b>${cnt("falling")}</b>${cnt("new") ? ` · 🆕 первый месяц <b>${cnt("new")}</b>` : ""}</div>
     ${L.length ? `<div class="tbl"><table class="rtab"><thead><tr><th>Место</th><th>${RK === "stations" ? "АЗС" : RK === "managers" ? "Управляющий" : "Оператор"}</th><th>Сейчас</th><th>До → после</th><th>Динамика</th><th>По месяцам</th>${extraHead}</tr></thead>
       <tbody>${L.map((x, i) => `<tr class="${x.status === "falling" || x.status === "down" ? "bad" : ""}"><td class="n" style="font-size:1.1rem">${x.after == null ? "—" : medal(i)}</td><td>${name(x)}</td><td class="n ${lvl(x.now)}">${pct(x.now)}</td><td>${beforeAfter(x)}</td><td>${dynBadge(x)}</td><td>${spark(x.series)}</td>${extra(x)}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">Нет данных проверок — загрузите бланки ОСК.</div>`}
+  </section>`;
+}
+/* 🏅 вкладка «Поощрения»: кого премировать по итогам квартала — по всей сети, по правилам листа «Резервный фонд» бланка */
+function bonusTab(forPrint = false) {
+  const all = D.bonuses, list = BONLY && !forPrint ? all.filter(b => b.ok) : forPrint ? all.filter(b => b.ok) : all, qm = all[0]?.quarterMonth ?? ((+D.month.slice(5) - 1) % 3 + 1);
+  const qMonths = (() => { const d = new Date(Date.parse(D.month + "-15T00:00:00Z")); return [0, 1, 2].map(i => { const x = new Date(d); x.setUTCMonth(d.getUTCMonth() - (qm - 1) + i); return x.toISOString().slice(0, 7); }); })();
+  const qName = `${MONTHS[+qMonths[0].slice(5) - 1]} — ${MONTHS[+qMonths[2].slice(5) - 1]} ${qMonths[2].slice(0, 4)}`;
+  const toPay = all.filter(b => b.bonus > 0).reduce((a, b) => a + b.bonus, 0), cand = all.filter(b => b.ok), stations = [...new Set(cand.map(b => b.station))];
+  const fundNet = D.stations.reduce((a, s) => a + (s.fund?.balance || 0), 0);
+  return `<section class="panel" style="gap:12px">
+    <div class="dlg-h"><h2 style="margin:0">Поощрения за квартал · ${qName}</h2><span class="muted">сейчас ${qm}-й месяц квартала · ${mName(D.month)}</span>${forPrint ? "" : `<button class="btn no-print x" id="bonly" type="button" aria-pressed="${BONLY}">${BONLY ? "Показать всех операторов" : "Только кандидаты"}</button><button class="btn pri no-print" id="bpdf" type="button">📄 PDF — список на поощрение</button>`}</div>
+    <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      <div class="kpi top"><b>${cand.length}</b><small>⭐ кандидатов на поощрение · ${stations.length} станций</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.15rem">${qm === 3 ? rub(toPay) : "—"}</b><small>${qm === 3 ? "к выплате по итогам квартала" : "сумма считается в последнем месяце квартала"}</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.15rem">${rub(fundNet)}</b><small>в резервных фондах станций сейчас</small></div>
+      <div class="kpi"><b>${qm}-й</b><small>месяц квартала · поощрение — раз в квартал</small></div></section>
+    <div class="muted" style="font-size:.84rem">Правила бланка: средний результат за квартал не ниже 90%, в каждом месяце не больше 3 грубых нарушений; на поощрения идёт 50% фонда станции, делится поровну между её кандидатами, округление вниз до 10 ₽. Пока квартал не закончен — «претендует».</div>
+    ${list.length ? `<div class="tbl"><table class="rtab"><thead><tr><th>АЗС</th><th>Оператор</th>${qMonths.map((m, i) => `<th>${MONTHS[+m.slice(5) - 1].slice(0, 3)}, %</th><th>гр.</th>`).join("")}<th>Средний %</th><th>Грубых всего</th><th>Статус</th><th>Поощрение</th></tr></thead><tbody>
+      ${list.map(b => { const byM = qMonths.map(m => b.byM.find(x => x.m === m) || { pct: null, gross: null }); return `<tr><td><a href="#" data-goto="${esc(b.station)}" style="color:inherit"><b>${esc(b.station)}</b></a><br><span class="muted" style="font-size:.78rem">${esc(b.stationName || "")}</span></td><td>${b.ok ? "⭐ " : ""}<b>${esc(b.name)}</b></td>${byM.map(x => `<td class="n ${lvl(x.pct)}">${pct(x.pct)}</td><td class="n">${x.gross ?? "—"}</td>`).join("")}<td class="n"><span class="pill ${tone(b.qAvg)}">${pct(b.qAvg)}</span></td><td class="n">${b.gSum}</td><td class="${b.ok ? "lv-top" : "muted"}">${esc(b.status)}</td><td class="n">${b.bonus ? `<b class="lv-top">${rub(b.bonus)}</b>` : "—"}</td></tr>`; }).join("")}</tbody></table></div>`
+      : `<div class="empty">${all.length ? "Кандидатов пока нет — ни у кого средний результат за квартал не достигает 90% при допустимом числе грубых. «Показать всех операторов» — увидеть, кому сколько не хватает." : "Нет загруженных бланков за этот квартал."}</div>`}
   </section>`;
 }
 /* строка отзыва в таблице: когда · станция · оценка · текст · источник и автор */
@@ -429,23 +481,31 @@ function stationHtml(code) {
   return `<div class="dlg">
     <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager, s.osk && "ОСК: " + s.osk].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><a class="btn x no-print" href="/api/template?st=${encodeURIComponent(s.code)}">⬇ Бланк станции</a><button class="btn pri no-print" type="button" id="pdf">📄 PDF для управляющего</button><button class="btn no-print" type="button" id="close">Закрыть</button></div>
     <div class="print-only" style="font-size:.85rem;color:var(--ink2)">Отчёт ОСК для управляющего · станция ${esc(s.code)} · ${mName(D.month)} · сформирован ${new Date().toLocaleString("ru-RU")}</div>
+    ${legend5()}
+    <h3>Главные показатели · ${mName(D.month)}</h3>
     <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-      <div class="kpi"><b class="${lvl(s.now.pct)}">${pct(s.now.pct)}</b><small>стандарт сейчас · по 3 последним сменам</small></div>
-      <div class="kpi"><b class="${lvl(s.pct)}">${pct(s.pct)}</b><small>за ${mName(D.month)} · план ОСК ${s.now.plan.done} из ${s.now.plan.need}</small></div>
-      <div class="kpi"><b>${s.rating == null ? "—" : "★ " + s.rating.toFixed(1)}</b><small>отзывы · ${s.reviews}, плохих ${s.bad}</small></div>
-      <div class="kpi"><b>${s.gross}</b><small>грубых нарушений</small></div>
-      <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.fines)}</b><small>взыскания · управляющему ${rub(s.managerFine)}</small></div>
+      <div class="kpi ${tone(s.pct)}"><b>${pct(s.pct)}</b><small>соблюдение стандарта операторами · ${esc(levelName(s.pct))}</small></div>
+      <div class="kpi ${tone(s.shopPct)}"><b>${pct(s.shopPct)}</b><small>тайный покупатель · ${s.shopPct == null ? "не проведён" : esc(levelName(s.shopPct))}</small></div>
+      <div class="kpi ${s.gross ? "bad" : "ok"}"><b>${s.gross}</b><small>грубых нарушений · случаев за месяц</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.fines)}</b><small>взыскание с операторов · оштрафовано: ${s.fined} чел.</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.managerFine)}</b><small>штраф управляющего · по итогам месяца</small></div>
+      <div class="kpi ${tone(s.now.pct)}"><b>${pct(s.now.pct)}</b><small>сейчас · по 3 последним сменам · план ОСК ${s.now.plan.done} из ${s.now.plan.need}</small></div>
     </section>
+    <h3>Операторы</h3>${s.now.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Смен</th><th>Соблюдение</th><th>Грубых</th><th>Взыскание</th><th>Поощр. за квартал</th><th>Мера</th><th>Сейчас · тренд</th><th>Последняя проверка</th></tr></thead><tbody>${s.now.operators.map(n => { const o = s.operators.find(x => x.name === n.name), c = s.fund?.candidates.find(x => x.name === n.name);
+      return `<tr class="${rowTone(o?.pct)}"><td>${o?.level === "top" ? "⭐ " : ""}<b>${esc(n.name)}</b></td><td class="n">${o?.shifts ?? 0}</td><td class="n"><span class="pill ${tone(o?.pct)}">${pct(o?.pct ?? null)}</span></td><td class="n">${o?.gross ?? 0}</td><td class="n">${o ? rub(o.fine) : "—"}</td><td class="n">${c?.bonus ? `<b class="lv-top">${rub(c.bonus)}</b>` : c?.ok ? `<span class="lv-top">претендует</span>` : "—"}</td><td>${o ? esc(o.measure) : "—"}</td><td class="n">${pct(n.now)} ${trendOf(n)}</td><td>${freshOf(n)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Проверок нет.</div>`}
+    <h3>Поощрения за квартал</h3>${s.fund ? `<section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div class="kpi ${s.fund.candidates.some(c => c.ok) ? "top" : ""}"><b>${s.fund.candidates.filter(c => c.ok).length}</b><small>кандидаты на поощрение · результат ${s.fund.cfg.bonusPct}% и выше</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.1rem">${s.fund.quarterMonth === 3 ? rub(s.fund.each) : "—"}</b><small>поощрение каждому · ${s.fund.quarterMonth === 3 ? "по итогам квартала, по согласованию с руководством" : "считается в последнем месяце квартала"}</small></div>
+      <div class="kpi"><b>${s.fund.quarterMonth}-й</b><small>месяц квартала · поощрение — раз в квартал</small></div></section>` : ""}
+    <h3>Резервный фонд станции</h3>${s.fund ? fundHtml(s.fund) : `<div class="empty">Фонд считается по загруженным бланкам — проверок станции пока нет.</div>`}
     <div class="cols">
-      <div style="grid-column:1/-1"><h3>Операторы · сейчас и за ${mName(D.month)}</h3>${s.now.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Сейчас · 3 смены</th><th>Тренд</th><th>Последняя проверка</th><th>Смен в месяце</th><th>За месяц</th><th>Грубых</th><th>Мера (месяц)</th><th>Взыскание</th></tr></thead><tbody>${s.now.operators.map(n => { const o = s.operators.find(x => x.name === n.name); return `<tr><td>${o?.level === "top" ? "⭐ " : ""}${esc(n.name)}</td><td class="n ${lvl(n.now)}">${pct(n.now)}</td><td class="n">${trendOf(n)}</td><td>${freshOf(n)}</td><td class="n ${n.inMonth >= 3 ? "lv-ok" : ""}">${n.inMonth} из 3</td><td class="n ${lvl(o?.pct)}">${pct(o?.pct ?? null)}</td><td class="n">${o?.gross ?? 0}</td><td class="lv-${!o ? "" : o.level === "ok" || o.level === "top" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${o ? esc(o.measure) : `<span class="muted">—</span>`}</td><td class="n">${o ? rub(o.fine) : "—"}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Проверок нет.</div>`}</div>
-      <div style="grid-column:1/-1"><h3>Резервный фонд станции · ${mName(D.month)}</h3>${s.fund ? `<div class="sig" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-        <div><b style="font-size:1.05rem">${rub(s.fund.open)}</b><small>остаток с прошлого месяца</small></div>
-        <div><b style="font-size:1.05rem">+ ${rub(s.fund.inOps + s.fund.inMgr)}</b><small>взыскания: операторы ${rub(s.fund.inOps)}, управляющий ${rub(s.fund.inMgr)}</small></div>
-        <div><b style="font-size:1.05rem">${s.fund.paid ? "− " + rub(s.fund.paid) : "—"}</b><small>${s.fund.quarterMonth === 3 ? (s.fund.paid ? `поощрения: ${s.fund.winners.length} × ${rub(s.fund.each)}` : "поощрять некого") : `поощрения — в 3-м месяце квартала (сейчас ${s.fund.quarterMonth}-й)`}</small></div>
-        <div class="ok"><b style="font-size:1.05rem">${rub(s.fund.balance)}</b><small>остаток на следующий месяц</small></div></div>
-        ${s.fund.candidates.length ? `<div class="tbl" style="margin-top:8px"><table><thead><tr><th>Итоги квартала</th><th>Средний % за квартал</th><th>Грубых в месяц, макс.</th><th>Поощрение</th></tr></thead><tbody>${s.fund.candidates.map(c => `<tr><td>${c.ok ? "⭐ " : ""}${esc(c.name)}</td><td class="n ${lvl(c.qAvg)}">${pct(c.qAvg)}</td><td class="n">${c.gMax}</td><td>${s.fund.winners.includes(c.name) ? `<b class="lv-ok">${rub(s.fund.each)}</b>` : c.ok ? `<span class="lv-ok">претендует</span>` : `<span class="muted">${c.qAvg == null ? "нет проверок" : c.qAvg < s.cfg.bonusPct ? "ниже " + s.cfg.bonusPct + " %" : "много грубых"}</span>`}</td></tr>`).join("")}</tbody></table></div>` : ""}` : `<div class="empty">Фонд считается по загруженным бланкам — проверок станции пока нет.</div>`}</div>
-      <div><h3>Где проседает — пункты стандарта</h3>${s.items.some(i => i.pct != null) ? s.items.map(i => `<div class="it"><span>${esc(i.name)}</span><div class="bar" style="--c:${i.pct == null ? "var(--none)" : i.pct >= 85 ? "var(--ok)" : i.pct >= 70 ? "var(--warn)" : "var(--bad)"}"><i style="width:${i.pct || 0}%"></i></div><span class="num">${pct(i.pct)}</span></div>`).join("") : `<div class="empty">Нет данных.</div>`}</div>
-      <div><h3>Тайный покупатель</h3>${s.shop.length ? s.shop.slice(0, 3).map(v => `<div class="list"><div><b>${dd(v.date)} — ${pct(v.pct)}</b><br>${v.sections.filter(x => x.pct != null).map(x => `${esc(x.section)}: ${x.pct}%`).join(" · ")}${v.note ? `<br><span class="muted">${esc(v.note)}</span>` : ""}</div></div>`).join("") : `<div class="empty">Проверок тайного покупателя за месяц нет.</div>`}</div>
+      <div><h3>Где проседает станция — пункты стандарта</h3>${s.items.some(i => i.pct != null) ? s.items.map(i => `<div class="it"><span>${esc(i.name)}</span><div class="bar" style="--c:${col5(i.pct)}"><i style="width:${i.pct || 0}%"></i></div><span class="num">${pct(i.pct)}</span></div>`).join("") : `<div class="empty">Нет данных.</div>`}</div>
+      <div><h3>Тайный покупатель — по разделам</h3>${s.shop.length ? s.shop.slice(0, 1).map(v => `<div class="muted" style="font-size:.82rem">${dd(v.date)} · итог ${pct(v.pct)}</div>${v.sections.map(x => `<div class="it"><span>${esc(x.section)}</span><div class="bar" style="--c:${col5(x.pct)}"><i style="width:${x.pct || 0}%"></i></div><span class="num">${pct(x.pct)}</span></div>`).join("")}${v.note ? `<div class="muted">${esc(v.note)}</div>` : ""}`).join("") : `<div class="empty">Проверок тайного покупателя за месяц нет.</div>`}</div>
+      <div style="grid-column:1/-1"><h3>На что обратить внимание</h3><div class="list">
+        <div>Самый слабый пункт стандарта: <b>${s.weak ? `${esc(s.weak.name)} — ${s.weak.pct}%` : "нет данных"}</b></div>
+        <div>Самый слабый раздел у тайного покупателя: <b>${s.weakShop ? `${esc(s.weakShop.section)} — ${s.weakShop.pct}%` : "нет данных"}</b></div>
+        <div>Оператор с самым низким результатом: <b>${s.lowOp ? `${esc(s.lowOp.name)} — ${s.lowOp.pct}%` : "нет данных"}</b></div>
+        <div>Операторов ниже нормы: <b>${s.checkedOps ? `${s.belowNorm} из ${s.checkedOps}` : "нет данных"}</b></div></div></div>
       <div><h3>Находки ОСК и ОСБ</h3>${s.finds.length ? `<div class="list">${s.finds.slice(0, 8).map(f => `<div><b class="${!f.fixed && f.due && f.due < new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10) ? "lv-bad" : f.fixed ? "lv-ok" : "lv-warn"}">${f.fixed ? "исправлено" : f.due ? "до " + dd(f.due) : "открыто"}</b> · ${dd(f.date)} · ${esc(f.who)}<br>${esc(f.what)}${f.to ? ` <span class="muted">→ ${esc(f.to)}</span>` : ""}</div>`).join("")}</div>` : `<div class="empty">Находок нет.</div>`}</div>
     </div>
     <div><h3>Отзывы о станции · ${mName(D.month)}</h3>${rs.length ? `<div style="max-height:380px;overflow:auto"><table class="rtab"><thead><tr><th>Когда</th><th>Оценка</th><th>Отзыв</th><th>Источник · автор</th></tr></thead><tbody>${rs.slice(0, 60).map(r => revRow(r, false)).join("")}</tbody></table></div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>

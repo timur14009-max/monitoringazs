@@ -142,11 +142,15 @@ export function build(sheet, reviews, { month, today }) {
       /* кандидаты квартала: месяцы квартала до этого включительно */
       const qMonths = [0, 1, 2].slice(0, qm).map(i => { const d = new Date(Date.parse(mm + "-15T00:00:00Z")); d.setUTCMonth(d.getUTCMonth() - (qm - 1) + i); return d.toISOString().slice(0, 7); });
       const names = [...new Set(qMonths.flatMap(q => opsAt(q).operators.filter(o => o.station === code).map(o => o.name)))];
-      const cand = names.map(n => { const per = qMonths.map(q => opsAt(q).operators.find(o => o.station === code && o.name === n)).filter(Boolean), ps = per.map(o => o.pct).filter(x => x != null), qAvg = ps.length ? Math.round(avg(ps)) : null, gMax = Math.max(0, ...per.map(o => o.gross));
-        return { name: n, qAvg, gMax, months: per.length, ok: qAvg != null && qAvg >= C.bonusPct && gMax <= C.bonusMaxGross }; }).sort((a, b) => (b.qAvg ?? -1) - (a.qAvg ?? -1));
-      let paid = 0, each = 0; const win = cand.filter(c => c.ok);
-      if (qm === 3 && win.length) { const pool = bal * C.bonusShare; each = Math.floor(pool / win.length / 10) * 10; if (C.bonusCap > 0) each = Math.min(each, C.bonusCap); paid = each * win.length; bal -= paid; }
-      last = { month: mm, open: Math.round(open), inOps: finesOps, inMgr: mgr, paid, each, balance: Math.round(bal), quarterMonth: qm, candidates: cand, winners: qm === 3 ? win.map(c => c.name) : [] };
+      /* как лист «Резервный фонд» бланка: по каждому месяцу квартала — % и грубых; средний %, грубых всего; статус словами бланка */
+      const cand = names.map(n => { const byM = qMonths.map(q => { const o = opsAt(q).operators.find(x => x.station === code && x.name === n); return { m: q, pct: o?.pct ?? null, gross: o ? o.gross : null }; });
+        const ps = byM.map(x => x.pct).filter(x => x != null), qAvg = ps.length ? Math.round(avg(ps)) : null, gMax = Math.max(0, ...byM.map(x => x.gross || 0)), gSum = byM.reduce((a, x) => a + (x.gross || 0), 0);
+        const ok = qAvg != null && qAvg >= C.bonusPct && gMax <= C.bonusMaxGross;
+        return { name: n, byM, qAvg, gMax, gSum, months: byM.filter(x => x.pct != null).length, ok, why: qAvg == null ? "Нет данных" : qAvg < C.bonusPct ? `Ниже порога ${C.bonusPct}%` : gMax > C.bonusMaxGross ? `Больше ${C.bonusMaxGross} грубых в месяце` : "" }; }).sort((a, b) => (b.qAvg ?? -1) - (a.qAvg ?? -1));
+      let paid = 0, each = 0, pool = 0; const win = cand.filter(c => c.ok), total = bal;
+      if (qm === 3) { pool = Math.round(bal * C.bonusShare); if (win.length) { each = Math.floor(pool / win.length / 10) * 10; if (C.bonusCap > 0) each = Math.min(each, C.bonusCap); paid = each * win.length; bal -= paid; } }
+      for (const c of cand) { c.bonus = qm === 3 && c.ok ? each : 0; c.status = !c.ok ? (c.why || "Не проходит") : qm < 3 ? "Претендует — выплата в конце квартала" : each > 0 ? "Поощрение" : "Заслужил — в фонде нет средств"; }
+      last = { month: mm, open: Math.round(open), inOps: finesOps, inMgr: mgr, total: Math.round(total), pool, paid, each, balance: Math.round(bal), quarterMonth: qm, qMonths, cfg: { bonusPct: C.bonusPct, bonusMaxGross: C.bonusMaxGross, bonusShare: C.bonusShare, bonusCap: C.bonusCap }, candidates: cand, winners: qm === 3 ? win.map(c => c.name) : [] };
     }
     return last;
   }
@@ -177,7 +181,10 @@ export function build(sheet, reviews, { month, today }) {
     /* светофор: худшее из стандарта, отзывов и просроченных находок */
     const lv = [pct == null ? 0 : pct >= S.norm ? 1 : pct >= S.feedback ? 2 : 3, rating == null ? 0 : rating >= 4.5 ? 1 : rating >= 4 ? 2 : 3, overdue.length ? 3 : open.length ? 2 : 0, g ? 2 : 0];
     const light = ["none", "green", "yellow", "red"][Math.max(...lv)];
-    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * cfgOf(s.code).managerShare), cfg: cfgOf(s.code), fund: fundOf(s.code), top: op.filter(o => o.level === "top").length, now: nowOf(s.code), gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
+    return { ...s, osk: oskOf(s.code), pct, operators: op, fines, managerFine: Math.round(fines * cfgOf(s.code).managerShare), cfg: cfgOf(s.code), fund: fundOf(s.code), top: op.filter(o => o.level === "top").length, now: nowOf(s.code),
+      /* «На что обратить внимание» — как в карточке бланка */
+      fined: op.filter(o => o.fine > 0).length, lowOp: op.filter(o => o.pct != null).sort((a, b) => a.pct - b.pct)[0] || null, belowNorm: op.filter(o => o.pct != null && o.pct < cfgOf(s.code).norm).length, checkedOps: op.filter(o => o.pct != null).length,
+      weakShop: sh[0] ? sh[0].sections.filter(x => x.pct != null).sort((a, b) => a.pct - b.pct)[0] || null : null, gross: g, items: it, weak, shop: sh, shopPct: sh[0]?.pct ?? null, open: open.length, overdue: overdue.length, finds: finds.filter(f => f.station === s.code).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30), rating, reviews: rs.length, bad, light };
   };
   const cards = stations.map(card);
   /* специалисты ОСК: за кем какие станции, сколько смен проверено за месяц, средний результат их станций */
@@ -225,6 +232,8 @@ export function build(sheet, reviews, { month, today }) {
       plan: { need: cards.reduce((a, c) => a + c.now.plan.need, 0), done: cards.reduce((a, c) => a + c.now.plan.done, 0) } },
     /* кого проверить в первую очередь: давно не проверяли или текущий результат ниже обратной связи */
     focus: cards.flatMap(c => c.now.operators.map(o => ({ ...o, osk: c.osk }))).filter(o => o.fresh === "stale" || o.fresh === "never" || (o.now != null && o.now < S.feedback)).sort((a, b) => ((b.fresh === "never" || b.fresh === "stale") - (a.fresh === "never" || a.fresh === "stale")) || (a.now ?? -1) - (b.now ?? -1)).slice(0, 15),
+    /* 🏅 поощрения по сети: все операторы квартала со статусом и суммой */
+    bonuses: cards.flatMap(c => c.fund ? c.fund.candidates.map(x => ({ ...x, station: c.code, stationName: c.name, manager: c.manager, quarterMonth: c.fund.quarterMonth, qMonths: c.fund.qMonths, each: c.fund.each, pool: c.fund.pool, fundTotal: c.fund.total })) : []).sort((a, b) => (b.ok - a.ok) || (b.qAvg ?? -1) - (a.qAvg ?? -1)),
     reviews: rv.slice(0, 500), unmatched, specialists, rating, charts: { byMonth, dist, bySource, byPlace, netItems },
     months: [...new Set([...(sheet["Наблюдения"] || []).map(r => isoDate(r["Дата записи"]).slice(0, 7)), ...rv.map(r => (r.date || "").slice(0, 7))].filter(Boolean))].sort().reverse(),
   };
