@@ -34,7 +34,9 @@ async function sheetRows(env, name) {
   const t = await r.text(); if (!r.ok || /^\s*<!doctype|<html/i.test(t)) throw new Error(`лист «${name}»: таблица не открылась (доступ по ссылке?)`);
   return parseCsv(t);
 }
-const loadSheet = env => cached("sheet:" + env.SHEET_ID, TTL, async () => { const out = {}; for (const n of SHEETS) { try { out[n] = await sheetRows(env, n); } catch (e) { out[n] = []; out._err = (out._err || []).concat(String(e.message)); } } return out; });
+// проверки ОСК теперь только из бланков станций; в общей таблице сети — справочники (станции, настройки, находки)
+const FROM_BLANKS = ["Наблюдения", "Грубые нарушения", "Тайный покупатель"];
+const loadSheet = env => cached("sheet2:" + env.SHEET_ID, TTL, async () => { const out = Object.fromEntries(FROM_BLANKS.map(n => [n, []])); for (const n of SHEETS.filter(n => !FROM_BLANKS.includes(n))) { try { out[n] = await sheetRows(env, n); } catch (e) { out[n] = []; out._err = (out._err || []).concat(String(e.message)); } } return out; });
 async function reviewToken(env, fresh = false) {
   const k = "token:" + env.REVIEW_LOGIN; if (!fresh) { const hit = await caches.default.match(new Request("https://cache.azs-monitor/" + encodeURIComponent(k))); if (hit) return (await hit.json()).t; }
   const r = await fetch(env.REVIEW_API + "/api/v1/admin/login", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ username: env.REVIEW_LOGIN, password: env.REVIEW_PASSWORD }) });
