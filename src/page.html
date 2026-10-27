@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Мониторинг АЗС</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Пульт сети АЗС: сверху — сеть одной строкой, ниже — станции плиткой (худшие первыми) и живая лента отзывов справа. Светофор — полоса и точка. */
+:root {
+  --bg: #f3f5f4; --panel: #ffffff; --ink: #18201d; --ink2: #56635d; --line: #dde3e0; --soft: #edf1ef;
+  --brand: #0f6b4f; --brand-ink: #ffffff; --ok: #2f8a3d; --warn: #c78a00; --bad: #c8342b; --none: #9aa6a0; --star: #e0a400;
+  --f-body: "Onest", "Segoe UI", system-ui, sans-serif; --f-num: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1412; --panel: #151d1a; --ink: #e4ece8; --ink2: #9fb0a8; --line: #26312d; --soft: #1b2522;
+  --brand: #3fc191; --brand-ink: #08130e; --ok: #5fcf6d; --warn: #f2bd3d; --bad: #ff6b5e; --none: #5e6b65; --star: #ffc93d; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #0e1412; --panel: #151d1a; --ink: #e4ece8; --ink2: #9fb0a8; --line: #26312d; --soft: #1b2522;
+  --brand: #3fc191; --brand-ink: #08130e; --ok: #5fcf6d; --warn: #f2bd3d; --bad: #ff6b5e; --none: #5e6b65; --star: #ffc93d; color-scheme: dark }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); padding-top: env(safe-area-inset-top, 0px); }
+.wrap { max-width: 1500px; margin: 0 auto; padding-block: 16px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+button, select, input { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible, input:focus-visible, .st:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+/* шапка */
+header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.logo { display: flex; gap: 10px; align-items: center; margin-right: auto; }
+.logo b { font-size: 1.25rem; letter-spacing: -0.01em; }
+.logo i { width: 12px; height: 12px; border-radius: 3px; background: var(--brand); display: inline-block; }
+.muted { color: var(--ink2); font-size: 0.85rem; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 7px 12px; cursor: pointer; font-size: 0.88rem; text-decoration: none; color: var(--ink); display: inline-block; }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+select.btn { padding-right: 28px; }
+/* строка сети */
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.kpi b { font: 600 1.6rem/1.15 var(--f-num); font-variant-numeric: tabular-nums; }
+.kpi small { color: var(--ink2); font-size: 0.8rem; }
+.kpi.bad b { color: var(--bad); } .kpi.warn b { color: var(--warn); } .kpi.ok b { color: var(--ok); }
+@media (max-width: 1000px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.alert { border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line)); background: color-mix(in srgb, var(--warn) 10%, var(--panel)); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; }
+/* основное */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 10px; min-width: 0; }
+.st { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; cursor: pointer; text-align: left; min-width: 0; }
+.st:hover { border-color: color-mix(in srgb, var(--c) 60%, var(--line)); }
+.st[data-l="green"] { --c: var(--ok); } .st[data-l="yellow"] { --c: var(--warn); } .st[data-l="red"] { --c: var(--bad); } .st[data-l="none"] { --c: var(--none); }
+.st-h { display: flex; align-items: baseline; gap: 8px; }
+.st-h b { font-size: 1.15rem; } .st-h span { color: var(--ink2); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 0.86rem; }
+.row b { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-size: 1rem; }
+.bar { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--c, var(--brand)); border-radius: 99px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 0.74rem; padding: 2px 8px; border-radius: 99px; background: var(--soft); color: var(--ink2); }
+.chip.bad { background: color-mix(in srgb, var(--bad) 15%, var(--panel)); color: var(--bad); } .chip.warn { background: color-mix(in srgb, var(--warn) 18%, var(--panel)); color: color-mix(in srgb, var(--warn) 80%, var(--ink)); }
+.stars { color: var(--star); letter-spacing: 1px; }
+/* лента отзывов */
+.feed { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 10px); max-height: calc(100vh - 30px); min-width: 0; }
+.feed-h { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.feed-h b { margin-right: auto; }
+.feed-l { overflow-y: auto; padding: 6px 0; }
+.rv { padding: 10px 14px; border-bottom: 1px solid var(--soft); display: grid; gap: 3px; }
+.rv.bad { background: color-mix(in srgb, var(--bad) 7%, var(--panel)); border-left: 3px solid var(--bad); }
+.rv-h { display: flex; gap: 8px; align-items: baseline; font-size: 0.82rem; flex-wrap: wrap; }
+.rv-h b { font-size: 0.9rem; }
+.rv p { margin: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.src { font-size: 0.72rem; color: var(--ink2); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+@media (max-width: 1100px) { .feed { position: static; max-height: 70vh; } }
+/* подробности станции */
+dialog { border: 0; padding: 0; border-radius: 14px; background: var(--panel); color: var(--ink); width: min(1000px, calc(100vw - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog::backdrop { background: rgba(5, 10, 8, .55); }
+.dlg { display: grid; gap: 16px; padding: 18px 20px 22px; }
+.dlg-h { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.dlg-h h2 { margin: 0; font-size: 1.4rem; } .dlg-h .x { margin-left: auto; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+h3 { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink2); }
+.tbl { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--soft); text-align: left; white-space: nowrap; } th { color: var(--ink2); font-weight: 500; font-size: 0.78rem; }
+td.n { font-family: var(--f-num); font-variant-numeric: tabular-nums; text-align: right; }
+.lv-ok { color: var(--ok); } .lv-warn { color: var(--warn); } .lv-bad { color: var(--bad); }
+.it { display: grid; grid-template-columns: 170px 1fr 44px; gap: 8px; align-items: center; font-size: 0.86rem; } .it .num { text-align: right; }
+.list { display: grid; gap: 6px; font-size: 0.88rem; } .list > div { padding: 7px 10px; border-radius: 8px; background: var(--soft); overflow-wrap: anywhere; }
+.empty { color: var(--ink2); font-size: 0.88rem; padding: 6px 0; }
+/* вход */
+.login { min-height: 80vh; display: grid; place-items: center; }
+.login form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 12px; width: min(360px, 100%); }
+.login input { padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); font-size: 16px; }
+.login button { background: var(--brand); color: var(--brand-ink); border: 0; border-radius: 9px; padding: 10px; font-weight: 600; cursor: pointer; }
+.err { color: var(--bad); font-size: 0.88rem; }
+/* режим экрана в офисе */
+body.tv { font-size: 17px; } body.tv .grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); } body.tv .hide-tv { display: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
+<script>
+const AUTH = "__AUTH__" === "1", LOGIN_ERR = "__ERR__" === "1";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const rub = n => Math.round(+n || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
+const pct = v => v == null ? "—" : v + "%";
+const lvl = v => v == null ? "" : v >= 85 ? "lv-ok" : v >= 70 ? "lv-warn" : "lv-bad";
+const stars = r => "★".repeat(Math.round(r || 0)) + "☆".repeat(5 - Math.round(r || 0));
+const SRC = { telegram: "Telegram", "2gis": "2ГИС", yandex: "Яндекс", google: "Google" };
+const MONTHS = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const mName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
+const dd = d => d ? d.slice(8, 10) + "." + d.slice(5, 7) : "";
+let D = null, month = "", onlyBad = false, tv = /(^|[?&])tv\b/.test(location.search), timer = null;
+try { onlyBad = localStorage.getItem("azs-bad") === "1"; } catch {}
+if (tv) document.body.classList.add("tv");
+
+function loginView() {
+  $("#app").innerHTML = `<div class="login"><form method="post" action="/login"><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
+    <label class="muted" for="pw">Пароль руководителя</label><input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+    ${LOGIN_ERR ? `<div class="err" role="alert">Пароль не подошёл. Попробуйте ещё раз.</div>` : ""}<button type="submit">Войти</button></form></div>`;
+}
+async function load() {
+  try { const r = await fetch("/api/data" + (month ? "?m=" + month : ""), { cache: "no-store" }); if (r.status === 401) { location.reload(); return; } D = await r.json(); if (!month) month = D.month; render(); }
+  catch { const a = $("#status"); if (a) a.textContent = "Нет связи — показаны прежние данные"; }
+}
+function card(s) {
+  return `<button class="st" data-l="${s.light}" data-code="${esc(s.code)}" type="button" aria-label="Станция ${esc(s.code)}">
+    <div class="st-h"><b>${esc(s.code)}</b><span>${esc(s.manager || s.name || "")}</span></div>
+    <div class="row"><span>Стандарт</span><b class="${lvl(s.pct)}">${pct(s.pct)}</b></div><div class="bar"><i style="width:${s.pct || 0}%"></i></div>
+    <div class="row"><span>Отзывы</span>${s.reviews ? `<span><span class="stars" aria-hidden="true">${stars(s.rating)}</span> <b>${s.rating.toFixed(1)}</b> <span class="muted">(${s.reviews})</span></span>` : `<span class="muted">нет</span>`}</div>
+    <div class="chips">${s.bad ? `<span class="chip bad">плохих отзывов ${s.bad}</span>` : ""}${s.gross ? `<span class="chip bad">грубых ${s.gross}</span>` : ""}${s.overdue ? `<span class="chip bad">просрочено ${s.overdue}</span>` : s.open ? `<span class="chip warn">открытых находок ${s.open}</span>` : ""}${s.weak && s.weak.pct < 85 ? `<span class="chip">слабое: ${esc(s.weak.name.toLowerCase())} ${s.weak.pct}%</span>` : ""}${s.shopPct != null ? `<span class="chip">тайный покупатель ${s.shopPct}%</span>` : ""}${s.pct == null && !s.reviews ? `<span class="chip">проверок ещё нет</span>` : ""}</div>
+  </button>`;
+}
+function rvItem(r) {
+  return `<div class="rv ${r.rating <= 2 ? "bad" : ""}"><div class="rv-h"><b>${esc(r.station || r.stationName.replace(/^(АЗС|ЭЗС):\s*/, "").slice(0, 40) || "Станция не указана")}</b><span class="stars" aria-label="${r.rating} из 5">${stars(r.rating)}</span><span class="muted">${dd(r.date)}</span><span class="src">${esc(SRC[r.source] || r.source)}</span></div>
+    <p>${esc(r.text || "Без текста")}</p>${r.author ? `<span class="muted">${esc(r.author)}</span>` : ""}</div>`;
+}
+const ORDER = { red: 0, yellow: 1, green: 2, none: 3 };
+function render() {
+  const N = D.net, list = [...D.stations].sort((a, b) => ORDER[a.light] - ORDER[b.light] || (a.pct ?? 999) - (b.pct ?? 999) || (a.rating ?? 9) - (b.rating ?? 9));
+  const rv = D.reviews.filter(r => !onlyBad || r.rating <= 2);
+  $("#app").innerHTML = `
+  <header><div class="logo"><i></i><b>Мониторинг АЗС</b></div>
+    <span class="muted" id="status">обновлено ${new Date(D.at).toTimeString().slice(0, 5)} · само каждую минуту</span>
+    <select class="btn" id="month" aria-label="Месяц">${(D.months.includes(D.month) ? D.months : [D.month, ...D.months]).map(m => `<option value="${m}" ${m === D.month ? "selected" : ""}>${mName(m)}</option>`).join("")}</select>
+    <button class="btn" id="tv" type="button" aria-pressed="${tv}">Экран в офисе</button><a class="btn hide-tv" href="/logout">Выйти</a></header>
+  ${D.errors.length ? `<div class="alert" role="status">${D.errors.map(esc).join("<br>")}</div>` : ""}
+  <section class="kpis" aria-label="Сеть за месяц">
+    <div class="kpi ${N.pct == null ? "" : N.pct >= 85 ? "ok" : N.pct >= 70 ? "warn" : "bad"}"><b>${pct(N.pct)}</b><small>стандарт по сети · станций проверено ${N.checked} из ${D.stations.length}</small></div>
+    <div class="kpi ${N.rating == null ? "" : N.rating >= 4.5 ? "ok" : N.rating >= 4 ? "warn" : "bad"}"><b>${N.rating == null ? "—" : "★ " + N.rating.toFixed(1)}</b><small>оценка посетителей · отзывов ${N.reviews}</small></div>
+    <div class="kpi ${N.badToday ? "bad" : ""}"><b>${N.badToday}</b><small>плохих отзывов сегодня · за месяц ${N.bad}</small></div>
+    <div class="kpi ${N.gross ? "bad" : ""}"><b>${N.gross}</b><small>грубых нарушений за месяц</small></div>
+    <div class="kpi ${N.overdue ? "bad" : N.open ? "warn" : ""}"><b>${N.open}</b><small>открытых находок ОСК и ОСБ · просрочено ${N.overdue}</small></div>
+    <div class="kpi"><b class="num" style="font-size:1.25rem">${rub(N.fines)}</b><small>взыскания с операторов за месяц</small></div>
+  </section>
+  ${D.unmatched.length ? `<div class="alert hide-tv">Отзывы приходят по станциям, которые ещё не сопоставлены с кодами АЗС (${D.unmatched.length}). Впишите их названия в лист «Станции», колонка «Название в отзывах»: ${D.unmatched.slice(0, 6).map(n => "«" + esc(n) + "»").join(", ")}${D.unmatched.length > 6 ? " и др." : ""}.</div>` : ""}
+  <div class="main">
+    <section class="grid" aria-label="Станции">${list.map(card).join("")}</section>
+    <aside class="feed" aria-label="Отзывы"><div class="feed-h"><b>Отзывы — сейчас</b><button class="btn" id="bad" type="button" aria-pressed="${onlyBad}">Только плохие</button></div>
+      <div class="feed-l">${rv.length ? rv.slice(0, 80).map(rvItem).join("") : `<div class="empty" style="padding:14px">${D.reviews.length ? "Плохих отзывов нет 👍" : "Отзывов пока нет."}</div>`}</div></aside>
+  </div>`;
+  $("#month").onchange = e => { month = e.target.value; load(); };
+  $("#tv").onclick = () => { tv = !tv; document.body.classList.toggle("tv", tv); render(); };
+  $("#bad").onclick = () => { onlyBad = !onlyBad; try { localStorage.setItem("azs-bad", onlyBad ? "1" : "0"); } catch {} render(); };
+  document.querySelectorAll(".st").forEach(b => b.onclick = () => openStation(b.dataset.code));
+}
+function openStation(code) {
+  const s = D.stations.find(x => x.code === code); if (!s) return;
+  const rs = D.reviews.filter(r => r.station === code);
+  $("#dlg").innerHTML = `<div class="dlg">
+    <div class="dlg-h"><h2 id="dlgTitle">${esc(s.code)}</h2><span class="muted">${esc([s.name, s.manager && "управляющий: " + s.manager].filter(Boolean).join(" · "))} · ${mName(D.month)}</span><button class="btn x" type="button" id="close">Закрыть</button></div>
+    <section class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div class="kpi"><b class="${lvl(s.pct)}">${pct(s.pct)}</b><small>стандарт операторов</small></div>
+      <div class="kpi"><b>${s.rating == null ? "—" : "★ " + s.rating.toFixed(1)}</b><small>отзывы · ${s.reviews}, плохих ${s.bad}</small></div>
+      <div class="kpi"><b>${s.gross}</b><small>грубых нарушений</small></div>
+      <div class="kpi"><b class="num" style="font-size:1.1rem">${rub(s.fines)}</b><small>взыскания · управляющему ${rub(s.managerFine)}</small></div>
+    </section>
+    <div class="cols">
+      <div><h3>Операторы</h3>${s.operators.length ? `<div class="tbl"><table><thead><tr><th>Оператор</th><th>Смен</th><th>Стандарт</th><th>Грубых</th><th>Мера</th><th>Взыскание</th></tr></thead><tbody>${s.operators.map(o => `<tr><td>${esc(o.name)}</td><td class="n">${o.shifts}</td><td class="n ${lvl(o.pct)}">${pct(o.pct)}</td><td class="n">${o.gross}</td><td class="lv-${o.level === "ok" ? "ok" : o.level === "warn" ? "warn" : "bad"}">${esc(o.measure)}</td><td class="n">${rub(o.fine)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Проверок за месяц нет.</div>`}</div>
+      <div><h3>Где проседает — пункты стандарта</h3>${s.items.some(i => i.pct != null) ? s.items.map(i => `<div class="it"><span>${esc(i.name)}</span><div class="bar" style="--c:${i.pct == null ? "var(--none)" : i.pct >= 85 ? "var(--ok)" : i.pct >= 70 ? "var(--warn)" : "var(--bad)"}"><i style="width:${i.pct || 0}%"></i></div><span class="num">${pct(i.pct)}</span></div>`).join("") : `<div class="empty">Нет данных.</div>`}</div>
+      <div><h3>Тайный покупатель</h3>${s.shop.length ? s.shop.slice(0, 3).map(v => `<div class="list"><div><b>${dd(v.date)} — ${pct(v.pct)}</b><br>${v.sections.filter(x => x.pct != null).map(x => `${esc(x.section)}: ${x.pct}%`).join(" · ")}${v.note ? `<br><span class="muted">${esc(v.note)}</span>` : ""}</div></div>`).join("") : `<div class="empty">Проверок тайного покупателя за месяц нет.</div>`}</div>
+      <div><h3>Находки ОСК и ОСБ</h3>${s.finds.length ? `<div class="list">${s.finds.slice(0, 8).map(f => `<div><b class="${!f.fixed && f.due && f.due < new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10) ? "lv-bad" : f.fixed ? "lv-ok" : "lv-warn"}">${f.fixed ? "исправлено" : f.due ? "до " + dd(f.due) : "открыто"}</b> · ${dd(f.date)} · ${esc(f.who)}<br>${esc(f.what)}${f.to ? ` <span class="muted">→ ${esc(f.to)}</span>` : ""}</div>`).join("")}</div>` : `<div class="empty">Находок нет.</div>`}</div>
+    </div>
+    <div><h3>Отзывы о станции</h3>${rs.length ? `<div class="list" style="max-height:320px;overflow:auto">${rs.slice(0, 30).map(rvItem).join("")}</div>` : `<div class="empty">${s.reviewName ? "Отзывов нет." : "Станция не сопоставлена с отзывами — впишите «Название в отзывах» в листе «Станции»."}</div>`}</div>
+  </div>`;
+  $("#close").onclick = () => $("#dlg").close();
+  $("#dlg").showModal();
+}
+if (!AUTH) loginView(); else { load(); timer = setInterval(() => { if (!$("#dlg").open) load(); }, 60000); }
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Мониторинг АЗС — отдельная платформа (решение Тимура 27.10): без базы Джарвиса.
+# Данные: Google Таблица «ОСК — сеть» (секрет SHEET_ID, доступ «все, у кого есть ссылка — читатель») и админка отзывов (REVIEW_LOGIN / REVIEW_PASSWORD).
+# Вход на экран — пароль MONITOR_PASS. Все секреты вводит Тимур: npx wrangler secret put ИМЯ
+name = "azs-monitor"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[vars]
+REVIEW_API = "https://review.asko-plus.ru"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false
